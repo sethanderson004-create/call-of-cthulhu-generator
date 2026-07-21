@@ -1,0 +1,23 @@
+{
+  "name": "call-of-cthulhu-generator",
+  "version": "1.0.0",
+  "description": "Zero-dependency Call of Cthulhu 7th-edition investigator generator: rolled stats, occupation, and a doom-touched backstory — all in the browser.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "start": "python3 -m http.server 8000"
+  },
+  "keywords": [
+    "call-of-cthulhu",
+    "tabletop",
+    "rpg",
+    "character-generator",
+    "lovecraft",
+    "dice"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sethanderson004-create/call-of-cthulhu-generator.git"
+  }
+}
