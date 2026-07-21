@@ -19,6 +19,14 @@ import {
   OCCUPATIONS,
   BACKSTORY_TABLES,
   BACKSTORY_KEYS,
+  characteristicRange,
+  pointBuyRemaining,
+  isValidPointBuy,
+  POINT_BUY_BUDGET,
+  skillBase,
+  autoAllocateSkills,
+  SKILL_CAP,
+  SKILL_BASES,
 } from '../src/cthulhu.js';
 
 // A tiny deterministic RNG (mulberry32) so tests can pin randomness.
@@ -198,4 +206,90 @@ test('makeInvestigator is fully populated and deterministic under a fixed seed',
 test('makeInvestigator respects a requested occupation', () => {
   const inv = makeInvestigator({ rng: seeded(12), occupation: 'Detective' });
   assert.equal(inv.occupation.name, 'Detective');
+});
+
+// ---- point buy ----------------------------------------------------------
+
+test('characteristicRange matches the roll distributions and guards bad keys', () => {
+  for (const k of ['STR', 'CON', 'DEX', 'APP', 'POW']) assert.deepEqual(characteristicRange(k), [15, 90]);
+  for (const k of ['SIZ', 'INT', 'EDU']) assert.deepEqual(characteristicRange(k), [40, 90]);
+  assert.throws(() => characteristicRange('ZZZ'));
+});
+
+test('point-buy budget is reachable within every characteristic range', () => {
+  // minimum possible sum
+  const mins = {};
+  for (const k of CHARACTERISTICS) mins[k] = characteristicRange(k)[0];
+  const minSum = pointBuyRemaining(mins);
+  assert.ok(minSum > 0, 'budget should exceed the sum of minimums');
+  // maximum possible sum (all 90) must be able to overspend, so the budget is bindable
+  const maxes = {};
+  for (const k of CHARACTERISTICS) maxes[k] = 90;
+  assert.ok(pointBuyRemaining(maxes) < 0, 'all-90 should exceed budget');
+});
+
+test('isValidPointBuy enforces range, step, and budget', () => {
+  const base = {};
+  for (const k of CHARACTERISTICS) base[k] = characteristicRange(k)[0];
+  // spend the remaining budget onto STR-like stats in steps of 5
+  let rem = pointBuyRemaining(base);
+  for (const k of ['STR', 'CON', 'DEX', 'APP', 'POW']) {
+    while (rem > 0 && base[k] < 90) { base[k] += 5; rem -= 5; }
+  }
+  assert.equal(pointBuyRemaining(base), 0);
+  assert.ok(isValidPointBuy(base), 'a fully-spent legal spread should validate');
+
+  const over = { ...base, POW: base.POW + 5 };
+  assert.ok(!isValidPointBuy(over), 'over budget should fail');
+
+  const offStep = { ...base };
+  offStep.STR = offStep.STR - 5 + 3; // not a multiple of 5
+  assert.ok(!isValidPointBuy(offStep), 'non-multiple-of-5 should fail');
+
+  const outOfRange = { ...base, SIZ: 35 }; // below SIZ min of 40
+  assert.ok(!isValidPointBuy(outOfRange), 'below-range should fail');
+});
+
+// ---- skills -------------------------------------------------------------
+
+test('skillBase resolves fixed, derived, and unlisted skills', () => {
+  const chars = { STR: 50, CON: 50, SIZ: 50, DEX: 61, APP: 50, INT: 50, POW: 50, EDU: 72 };
+  assert.equal(skillBase('Spot Hidden', chars), SKILL_BASES['Spot Hidden']);
+  assert.equal(skillBase('Cthulhu Mythos', chars), 0);
+  assert.equal(skillBase('Own Language', chars), 72); // = EDU
+  assert.equal(skillBase('Dodge', chars), 30); // floor(DEX/2)
+  assert.equal(skillBase('Totally Made Up Skill', chars), 5); // default
+});
+
+test('autoAllocateSkills never exceeds the cap and spends what it can', () => {
+  const rng = seeded(77);
+  for (let i = 0; i < 40; i++) {
+    const chars = rollCharacteristics(rng);
+    const occ = buildOccupation(OCCUPATIONS[i % OCCUPATIONS.length].name, chars, rng);
+    const { occupation, interests } = autoAllocateSkills(occ, chars, rng);
+    assert.equal(occupation.length, occ.skills.length);
+    const check = (rows, pool) => {
+      let added = 0;
+      for (const r of rows) {
+        assert.equal(r.total, r.base + r.added, `${r.name} total mismatch`);
+        assert.ok(r.total <= SKILL_CAP, `${r.name} exceeds cap: ${r.total}`);
+        assert.ok(r.added >= 0);
+        added += r.added;
+      }
+      assert.ok(added <= pool, `spent ${added} exceeds pool ${pool}`);
+      // capacity is ample here, so the whole pool should land
+      const capacity = rows.reduce((s, r) => s + (SKILL_CAP - r.base), 0);
+      if (capacity >= pool) assert.equal(added, pool, 'ample capacity should spend the full pool');
+    };
+    check(occupation, occ.occupationPoints);
+    check(interests, occ.personalInterestPoints);
+  }
+});
+
+test('makeInvestigator now carries allocated skills', () => {
+  const inv = makeInvestigator({ rng: seeded(9), occupation: 'Professor' });
+  assert.ok(Array.isArray(inv.skills.occupation));
+  assert.equal(inv.skills.occupation.length, 8);
+  assert.ok(inv.skills.occupation.every((r) => r.total >= r.base && r.total <= SKILL_CAP));
+  assert.ok(Array.isArray(inv.skills.interests));
 });

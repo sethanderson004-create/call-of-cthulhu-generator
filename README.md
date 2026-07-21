@@ -3,12 +3,16 @@
 A zero-dependency, browser-only generator for **Call of Cthulhu 7th-edition**
 investigators. Two ways to play:
 
-- **🕯️ Create step by step** — a guided walkthrough that rolls each
-  characteristic one at a time (with a note on what it governs and a remark on
-  your result), then walks you through age, vitals + a Luck roll, occupation,
-  and backstory drawn one prompt at a time — so you *feel* the investigator
-  take shape.
-- **🎲 Summon instantly** — one tap for a complete, doom-touched character.
+- **🕯️ Create step by step** — a guided walkthrough: set characteristics (roll
+  them one at a time *or* spend a point-buy budget), then age, vitals + a Luck
+  roll, occupation, **hands-on skill allocation** (spend occupation and
+  personal-interest points, or auto-spend), and backstory drawn one prompt at a
+  time — so you *feel* the investigator take shape.
+- **🎲 Summon instantly** — one tap for a complete, doom-touched character with
+  skills auto-allocated.
+
+Either way the finished sheet can be copied, **downloaded as a text
+character sheet**, or printed (→ PDF).
 
 Either way you get rolled characteristics, derived attributes, a Jazz Age name,
 an occupation with a themed skill spread, and a randomized backstory the Keeper

@@ -385,6 +385,119 @@ export function buildOccupation(occupation, chars, rng = Math.random) {
 }
 
 // ---------------------------------------------------------------------------
+// Point-buy alternative to rolling characteristics
+// ---------------------------------------------------------------------------
+
+// Per-characteristic legal range, matching the roll distributions
+// (3d6×5 → 15–90; (2d6+6)×5 → 40–90). Values stay multiples of 5.
+export const CHAR_RANGES = {
+  STR: [15, 90], CON: [15, 90], DEX: [15, 90], APP: [15, 90], POW: [15, 90],
+  SIZ: [40, 90], INT: [40, 90], EDU: [40, 90],
+};
+
+// Total points distributed across all eight characteristics, minimums
+// included. 460 sits just above the rolled average (~457), so a deliberate
+// build is competitive with a lucky one without dominating it.
+export const POINT_BUY_BUDGET = 460;
+
+export function characteristicRange(key) {
+  const r = CHAR_RANGES[key];
+  if (!r) throw new Error(`unknown characteristic: ${key}`);
+  return r.slice();
+}
+
+/** Points still unspent for a given characteristic map (negative = over budget). */
+export function pointBuyRemaining(chars) {
+  const spent = CHARACTERISTICS.reduce((s, k) => s + (chars[k] || 0), 0);
+  return POINT_BUY_BUDGET - spent;
+}
+
+/** True when every characteristic is in range, a multiple of 5, and within budget. */
+export function isValidPointBuy(chars) {
+  for (const k of CHARACTERISTICS) {
+    const v = chars[k];
+    const [lo, hi] = characteristicRange(k);
+    if (v == null || v < lo || v > hi || v % 5 !== 0) return false;
+  }
+  return pointBuyRemaining(chars) >= 0;
+}
+
+// ---------------------------------------------------------------------------
+// Skills — base values, and spending occupation / personal-interest points
+// ---------------------------------------------------------------------------
+
+// Starting skills may not be raised above this during creation.
+export const SKILL_CAP = 90;
+
+// Base chance for the skills our occupations and interest list reference.
+// "Own Language" (= EDU) and "Dodge" (= DEX/2) are computed, not listed here.
+export const SKILL_BASES = {
+  Accounting: 5, Anthropology: 1, Appraise: 5, Archaeology: 1, Biology: 1,
+  Charm: 15, Climb: 20, 'Cthulhu Mythos': 0, Disguise: 5, 'Drive Auto': 20,
+  'Fast Talk': 5, 'Fighting (Brawl)': 25, 'Firearms (Handgun)': 20,
+  'Firearms (Rifle/Shotgun)': 25, 'First Aid': 30, History: 5, Intimidate: 15,
+  Jump: 20, Law: 5, 'Library Use': 20, Listen: 20, Locksmith: 1,
+  'Mechanical Repair': 10, Medicine: 1, 'Natural World': 10, Navigate: 10,
+  Occult: 5, 'Other Language': 1, 'Other Language (Latin)': 1, Persuade: 10,
+  Psychoanalysis: 1, Psychology: 10, Ride: 5, 'Sleight of Hand': 10,
+  Streetwise: 5, Stealth: 20, 'Spot Hidden': 25, Survival: 10,
+  'Survival (any)': 10, Swim: 20, Throw: 20, Track: 10,
+  'Art (Literature)': 5, 'Art/Craft (any)': 5, 'Art/Craft (Acting)': 5,
+  'Art/Craft (Photography)': 5, 'Science (any)': 1, 'Science (Astronomy)': 1,
+  'Science (Biology)': 1, 'Science (Pharmacy)': 1,
+};
+
+// Common skills offered for personal-interest points in the guided builder.
+export const GENERAL_SKILLS = [
+  'Accounting', 'Charm', 'Climb', 'Dodge', 'Drive Auto', 'Fast Talk',
+  'Fighting (Brawl)', 'Firearms (Handgun)', 'First Aid', 'Intimidate', 'Jump',
+  'Listen', 'Occult', 'Persuade', 'Psychology', 'Sleight of Hand',
+  'Spot Hidden', 'Stealth', 'Swim', 'Throw',
+];
+
+/** Base value of a skill for a given investigator (handles EDU/DEX-derived skills). */
+export function skillBase(name, chars) {
+  if (/^Own Language/.test(name)) return chars.EDU;
+  if (name === 'Dodge') return Math.floor(chars.DEX / 2);
+  if (name in SKILL_BASES) return SKILL_BASES[name];
+  return 5; // sensible default for an unlisted specialization
+}
+
+/**
+ * Spread a pool of points across a set of skills, never exceeding SKILL_CAP,
+ * returning rows of { name, base, added, total }. Used to auto-fill skills for
+ * instantly-summoned investigators (the guided builder lets a human do it).
+ */
+function spendPoints(names, pool, chars, rng) {
+  const rows = names.map((name) => ({ name, base: skillBase(name, chars), added: 0 }));
+  let remaining = pool;
+  let guard = 100000;
+  while (remaining > 0 && guard-- > 0) {
+    const open = rows.filter((r) => r.base + r.added < SKILL_CAP);
+    if (!open.length) break;
+    const r = open[Math.floor(rng() * open.length)];
+    const step = Math.min(5, remaining, SKILL_CAP - (r.base + r.added));
+    r.added += step;
+    remaining -= step;
+  }
+  return rows.map((r) => ({ ...r, total: r.base + r.added }));
+}
+
+/** Auto-allocate occupation + personal-interest points into skill rows. */
+export function autoAllocateSkills(occupation, chars, rng = Math.random) {
+  const occupationRows = spendPoints(occupation.skills, occupation.occupationPoints, chars, rng);
+  // Pick a few general skills (not already covered by the occupation) for interests.
+  const pool = GENERAL_SKILLS.filter((n) => !occupation.skills.includes(n));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picks = pool.slice(0, Math.min(4, pool.length));
+  const interestRows = spendPoints(picks, occupation.personalInterestPoints, chars, rng);
+  return { occupation: occupationRows, interests: interestRows };
+}
+
+// ---------------------------------------------------------------------------
 // Backstory (7e-style) — the tables that make a sheet feel like a person.
 // ---------------------------------------------------------------------------
 
@@ -527,6 +640,7 @@ export function makeInvestigator(opts = {}) {
   const occupation = buildOccupation(occ, chars, rng);
   const backstory = rollBackstory(rng);
   const luck = roll(3, 6, rng).total * 5;
+  const skills = autoAllocateSkills(occupation, chars, rng);
   return {
     name,
     age,
@@ -535,6 +649,7 @@ export function makeInvestigator(opts = {}) {
     luck,
     attributes,
     occupation,
+    skills,
     backstory,
   };
 }

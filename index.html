@@ -244,6 +244,32 @@
   .txt { width: 100%; font: 16px/1.4 var(--serif); color: var(--ink); background: var(--surface-2);
     border: 1px solid var(--border-strong); border-radius: 10px; padding: 11px 13px; margin-top: 10px; }
 
+  .toggle { display: inline-flex; gap: 0; border: 1px solid var(--border-strong); border-radius: 10px;
+    overflow: hidden; margin: 0 0 16px; }
+  .toggle button { border: 0; border-radius: 0; background: transparent; padding: 9px 16px; font-size: 14px; }
+  .toggle button.on { background: var(--eldritch); color: #06120c; }
+  .toggle button:not(.on):hover { color: var(--eldritch); }
+  .stepper { display: inline-flex; align-items: center; gap: 10px; }
+  .stepper button { min-width: 38px; padding: 6px 0; font-size: 18px; line-height: 1; text-align: center; }
+  .cval.skv { min-width: 62px; font-size: 22px; }
+  b.ok { color: var(--eldritch); } b.warn { color: var(--gold); }
+
+  .skgrp { font: 700 11px/1 var(--sans); letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--eldritch-deep); margin: 18px 0 8px; }
+  .skgrp span { color: var(--ink-faint); font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .skrow { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .skrow:last-child { border-bottom: 0; }
+  .skn { color: var(--ink-dim); }
+  .skbase { font: 12px/1 var(--sans); color: var(--ink-faint); }
+
+  /* sheet skill list */
+  .skills li .skval { color: var(--ink-dim); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .skills li .skval.up { color: var(--eldritch); }
+  .skills li .skval .skbase { font-weight: 400; }
+  .skills li.skhdr { grid-column: 1 / -1; list-style: none; border: 0; padding: 12px 0 2px;
+    font: 700 10px/1 var(--sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--eldritch-deep); }
+
   @keyframes flipin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   .reveal-anim { animation: flipin .22s ease; }
 
@@ -350,6 +376,7 @@
       <button id="rerollName" class="ghost">🎭 New name</button>
       <button id="rerollStory" class="ghost">📖 New backstory</button>
       <button id="copy" class="ghost">📋 Copy sheet</button>
+      <button id="download" class="ghost">⬇ Download</button>
       <button id="print" class="ghost">🖨 Print</button>
       <button id="startover" class="ghost">↺ Start over</button>
     </div>
@@ -367,8 +394,10 @@
 import {
   makeInvestigator, rollCharacteristic, rollName, rollAge, rollBackstory, drawBackstory,
   deriveAttributes, ageDescriptor, buildOccupation, characteristicName, roll,
+  characteristicRange, pointBuyRemaining, isValidPointBuy, POINT_BUY_BUDGET,
+  skillBase, autoAllocateSkills, SKILL_CAP, GENERAL_SKILLS,
   OCCUPATIONS, CHARACTERISTICS, BACKSTORY_KEYS,
-} from './src/cthulhu.js?v=2';
+} from './src/cthulhu.js?v=3';
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -460,19 +489,28 @@ function renderVitals() {
   }
 }
 
+function skillRow(r) {
+  const raised = r.total > r.base;
+  return `<li><span class="skname">${r.name}</span>` +
+    `<span class="skval${raised ? ' up' : ''}">${r.total}%${raised ? ` <span class="skbase">(${r.base})</span>` : ''}</span></li>`;
+}
+
 function renderSkills() {
   const o = inv.occupation;
+  const sk = inv.skills || { occupation: o.skills.map((n) => ({ name: n, base: skillBase(n, inv.characteristics), added: 0, total: skillBase(n, inv.characteristics) })), interests: [] };
   $('occSkillsHead').textContent = `${o.emoji} ${o.name} — Skills`;
+  const occSpent = sk.occupation.reduce((s, r) => s + r.added, 0);
+  const intSpent = sk.interests.reduce((s, r) => s + r.added, 0);
   $('pointsNote').innerHTML =
-    `Spend <b>${o.occupationPoints}</b> occupation points across these, plus ` +
-    `<b>${o.personalInterestPoints}</b> personal-interest points anywhere.`;
-  const ul = $('skillList');
-  ul.innerHTML = '';
-  for (const s of o.skills) {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="skname">${s}</span>`;
-    ul.appendChild(li);
-  }
+    `Credit Rating <b>${o.creditRating}%</b>. ` +
+    `Occupation points <b>${occSpent}/${o.occupationPoints}</b> · ` +
+    `personal-interest points <b>${intSpent}/${o.personalInterestPoints}</b>.`;
+  const dodge = { name: 'Dodge', base: Math.floor(inv.characteristics.DEX / 2), total: inv.attributes.dodge, added: 0 };
+  const occHtml = sk.occupation.map(skillRow).join('');
+  const intHtml = (sk.interests.length ? sk.interests : []).map(skillRow).join('');
+  $('skillList').innerHTML =
+    occHtml + skillRow(dodge) +
+    (intHtml ? `<li class="skhdr">Personal interests</li>${intHtml}` : '');
 }
 
 function renderStory() {
@@ -561,8 +599,16 @@ function asText() {
     `HP ${a.hitPoints}   Sanity ${a.sanity}   Luck ${inv.luck}   Magic ${a.magicPoints}`,
     `Move ${a.move}   Dodge ${a.dodge}   Damage Bonus ${a.damageBonus}   Build ${a.build}   Credit ${o.creditRating}`,
     '',
-    `OCCUPATION SKILLS (${o.occupationPoints} occ pts + ${o.personalInterestPoints} interest pts)`,
-    o.skills.join(', '),
+    `SKILLS  (Credit Rating ${o.creditRating}%)`,
+    ...(inv.skills
+      ? [
+          ...inv.skills.occupation.map((r) => `  ${r.name}: ${r.total}%`),
+          `  Dodge: ${a.dodge}%`,
+          ...(inv.skills.interests.length
+            ? ['  — Personal interests —', ...inv.skills.interests.map((r) => `  ${r.name}: ${r.total}%`)]
+            : []),
+        ]
+      : [o.skills.join(', ')]),
     '',
     'BACKSTORY',
     `Ideology: ${b.ideology}`,
@@ -639,13 +685,19 @@ let draft = null;
 let step = 0;
 
 const STEPS = [
-  { label: 'Roll', render: stepChars, can: () => CHARACTERISTICS.every((k) => draft.chars[k] != null) },
+  { label: 'Stats', render: stepChars, can: statsComplete },
   { label: 'Age', render: stepAge, can: () => draft.age != null },
   { label: 'Vitals', render: stepVitals, can: () => draft.luck != null },
   { label: 'Calling', render: stepOcc, can: () => !!draft.occupation },
+  { label: 'Skills', render: stepSkills, can: () => true },
   { label: 'Story', render: stepStory, can: () => STORY_SLOTS.every(([k]) => draft.backstory[k]) },
   { label: 'Name', render: stepName, can: () => !!(draft.name && draft.name.full) },
 ];
+
+function statsComplete() {
+  if (draft.method === 'points') return isValidPointBuy(draft.chars) && pointBuyRemaining(draft.chars) === 0;
+  return CHARACTERISTICS.every((k) => draft.chars[k] != null);
+}
 
 function flashNumber(el, finalVal, roller) {
   if (reduceMotion) { el.textContent = finalVal; return; }
@@ -657,7 +709,11 @@ function flashNumber(el, finalVal, roller) {
 }
 
 function startGuided() {
-  draft = { chars: {}, age: 28, luck: null, occupation: null, occChoice: null, backstory: {}, name: null };
+  draft = {
+    method: 'roll', chars: {}, age: 28, luck: null,
+    occupation: null, occChoice: null, occAlloc: {}, intAlloc: {},
+    backstory: {}, name: null,
+  };
   step = 0;
   $('launch').hidden = true;
   $('empty').hidden = true;
@@ -697,14 +753,71 @@ function renderStep() {
   updateNav();
 }
 
-// ---- step 1: characteristics ----
+// ---- step 1: characteristics (roll or point-buy) ----
 function stepChars(el) {
+  const isPts = draft.method === 'points';
   el.innerHTML =
-    `<p class="lead">Roll the bones</p>` +
-    `<p class="lede">Eight numbers decide what your investigator can do. Roll them one at a time — feel each land.</p>` +
+    `<p class="lead">The measure of a soul</p>` +
+    `<p class="lede">Eight numbers decide what your investigator can do. Trust the dice, or spend a budget and build them on purpose.</p>` +
+    `<div class="toggle" id="methodToggle">` +
+    `<button data-m="roll" class="${isPts ? '' : 'on'}">🎲 Roll</button>` +
+    `<button data-m="points" class="${isPts ? 'on' : ''}">⚖️ Point buy</button></div>` +
+    `<div id="charBody"></div>`;
+  el.querySelector('#methodToggle').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-m]');
+    if (!b || b.dataset.m === draft.method) return;
+    draft.method = b.dataset.m;
+    draft.chars = {};
+    if (draft.method === 'points') for (const k of CHARACTERISTICS) draft.chars[k] = characteristicRange(k)[0];
+    stepChars(el);
+    updateNav();
+  });
+  if (isPts) return renderPointBuy(el.querySelector('#charBody'));
+  renderRollChars(el.querySelector('#charBody'));
+}
+
+function renderPointBuy(host) {
+  host.innerHTML =
+    `<p class="pointsnote" id="pbHead"></p>` +
+    `<div id="pbRows"></div>`;
+  const rows = host.querySelector('#pbRows');
+  const head = host.querySelector('#pbHead');
+  const refreshHead = () => {
+    const rem = pointBuyRemaining(draft.chars);
+    head.innerHTML = `Budget <b>${POINT_BUY_BUDGET}</b> · <b class="${rem === 0 ? 'ok' : 'warn'}">${rem}</b> point${rem === 1 ? '' : 's'} remaining.`;
+  };
+  for (const key of CHARACTERISTICS) {
+    const info = CHAR_INFO[key];
+    const [lo, hi] = characteristicRange(key);
+    const row = document.createElement('div');
+    row.className = 'crow';
+    row.innerHTML =
+      `<div><span class="cabbr">${key}</span><span class="cname">${characteristicName(key)}</span>` +
+      `<div class="cgov">${info.governs}</div></div>` +
+      `<div class="stepper"><button class="dec">−</button><span class="cval set" data-val>${draft.chars[key]}</span><button class="inc">+</button></div>`;
+    const valEl = row.querySelector('[data-val]');
+    const paint = () => {
+      valEl.textContent = draft.chars[key];
+      valEl.className = 'cval set ' + statClass(key, draft.chars[key]);
+    };
+    row.querySelector('.dec').addEventListener('click', () => {
+      if (draft.chars[key] - 5 >= lo) { draft.chars[key] -= 5; paint(); refreshHead(); updateNav(); }
+    });
+    row.querySelector('.inc').addEventListener('click', () => {
+      if (draft.chars[key] + 5 <= hi && pointBuyRemaining(draft.chars) >= 5) { draft.chars[key] += 5; paint(); refreshHead(); updateNav(); }
+    });
+    paint();
+    rows.appendChild(row);
+  }
+  refreshHead();
+}
+
+function renderRollChars(host) {
+  host.innerHTML =
     `<div id="crows"></div>` +
     `<div class="rowbtns"><button id="rollAll" class="ghost">🎲 Roll all remaining</button>` +
     `<span class="cgov" id="rollCount"></span></div>`;
+  const el = host;
   const rows = el.querySelector('#crows');
   const updateCount = () => {
     const n = CHARACTERISTICS.filter((k) => draft.chars[k] != null).length;
@@ -832,6 +945,7 @@ function stepOcc(el) {
     let built;
     if (draft.occupation && draft.occupation.name === name && !opts.reroll) built = draft.occupation;
     else built = buildOccupation(name, draft.chars);
+    if (!draft.occupation || draft.occupation.name !== name) { draft.occAlloc = {}; draft.intAlloc = {}; }
     draft.occupation = built; draft.occChoice = name;
     for (const c of cards.children) c.classList.toggle('sel', c.dataset.n === name);
     detail.innerHTML =
@@ -861,7 +975,68 @@ function stepOcc(el) {
   if (draft.occChoice) select(draft.occChoice);
 }
 
-// ---- step 5: backstory, drawn slot by slot ----
+// ---- step 5: allocate skill points ----
+function stepSkills(el) {
+  const chars = draft.chars;
+  const o = draft.occupation;
+  const occSpent = () => Object.values(draft.occAlloc).reduce((s, v) => s + v, 0);
+  const intSpent = () => Object.values(draft.intAlloc).reduce((s, v) => s + v, 0);
+
+  el.innerHTML =
+    `<p class="lead">What they know how to do</p>` +
+    `<p class="lede">Spend your points. Occupation points go on ${o.emoji} ${o.name}'s trade; personal-interest points on anything that took your fancy.</p>` +
+    `<div class="rowbtns" style="margin:0 0 8px"><button id="skAuto" class="ghost">✨ Auto-spend for me</button>` +
+    `<button id="skClear" class="ghost">Reset</button></div>` +
+    `<h3 class="skgrp">Occupation · <span id="occRem"></span></h3><div id="occSk"></div>` +
+    `<h3 class="skgrp">Personal interests · <span id="intRem"></span></h3><div id="intSk"></div>`;
+
+  const mkRow = (host, name, allocMap, poolFn, base) => {
+    const row = document.createElement('div');
+    row.className = 'skrow';
+    row.innerHTML =
+      `<div class="skn">${name} <span class="skbase">base ${base}</span></div>` +
+      `<div class="stepper"><button class="dec">−</button>` +
+      `<span class="cval set skv" data-v></span><button class="inc">+</button></div>`;
+    const vEl = row.querySelector('[data-v]');
+    const paint = () => { vEl.textContent = (base + (allocMap[name] || 0)) + '%'; };
+    row.querySelector('.dec').addEventListener('click', () => {
+      if ((allocMap[name] || 0) >= 5) { allocMap[name] -= 5; if (!allocMap[name]) delete allocMap[name]; paint(); refresh(); }
+    });
+    row.querySelector('.inc').addEventListener('click', () => {
+      const cur = base + (allocMap[name] || 0);
+      if (cur + 5 <= SKILL_CAP && poolFn() >= 5) { allocMap[name] = (allocMap[name] || 0) + 5; paint(); refresh(); }
+    });
+    paint();
+    host.appendChild(row);
+  };
+
+  const occHost = el.querySelector('#occSk');
+  for (const name of o.skills) mkRow(occHost, name, draft.occAlloc, () => o.occupationPoints - occSpent(), skillBase(name, chars));
+  const intHost = el.querySelector('#intSk');
+  const intSkills = GENERAL_SKILLS.filter((n) => !o.skills.includes(n));
+  for (const name of intSkills) mkRow(intHost, name, draft.intAlloc, () => o.personalInterestPoints - intSpent(), skillBase(name, chars));
+
+  const refresh = () => {
+    const or = o.occupationPoints - occSpent();
+    const ir = o.personalInterestPoints - intSpent();
+    el.querySelector('#occRem').innerHTML = `<b class="${or === 0 ? 'ok' : 'warn'}">${or}</b> of ${o.occupationPoints} left`;
+    el.querySelector('#intRem').innerHTML = `<b class="${ir === 0 ? 'ok' : 'warn'}">${ir}</b> of ${o.personalInterestPoints} left`;
+  };
+
+  el.querySelector('#skAuto').addEventListener('click', () => {
+    const auto = autoAllocateSkills(o, chars, Math.random);
+    draft.occAlloc = {}; draft.intAlloc = {};
+    for (const r of auto.occupation) if (r.added) draft.occAlloc[r.name] = r.added;
+    for (const r of auto.interests) if (r.added) draft.intAlloc[r.name] = r.added;
+    stepSkills(el);
+  });
+  el.querySelector('#skClear').addEventListener('click', () => {
+    draft.occAlloc = {}; draft.intAlloc = {}; stepSkills(el);
+  });
+  refresh();
+}
+
+// ---- step 6: backstory, drawn slot by slot ----
 function stepStory(el) {
   el.innerHTML =
     `<p class="lead">Who are they, really?</p>` +
@@ -924,6 +1099,16 @@ function stepName(el) {
 // ---- assemble the finished investigator ----
 function finishGuided() {
   draft.backstory.doom = drawBackstory('doom');
+  const chars = draft.chars;
+  const skillRows = (names, allocMap) => names.map((name) => {
+    const base = skillBase(name, chars);
+    const added = allocMap[name] || 0;
+    return { name, base, added, total: base + added };
+  });
+  const skills = {
+    occupation: skillRows(draft.occupation.skills, draft.occAlloc),
+    interests: skillRows(Object.keys(draft.intAlloc), draft.intAlloc),
+  };
   inv = {
     name: draft.name,
     age: draft.age,
@@ -932,6 +1117,7 @@ function finishGuided() {
     luck: draft.luck,
     attributes: deriveAttributes(draft.chars, draft.age),
     occupation: draft.occupation,
+    skills,
     backstory: draft.backstory,
   };
   $('wizard').hidden = true;
@@ -962,6 +1148,16 @@ $('rerollStory').addEventListener('click', () => {
   renderStory();
 });
 $('copy').addEventListener('click', copySheet);
+$('download').addEventListener('click', () => {
+  const blob = new Blob([asText()], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const slug = (inv.name.full || 'investigator').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  a.href = url; a.download = `${slug || 'investigator'}-coc-sheet.txt`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Character sheet downloaded');
+});
 $('print').addEventListener('click', () => window.print());
 
 // Expose hooks for Playwright checks.
