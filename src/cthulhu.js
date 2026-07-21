@@ -475,16 +475,32 @@ const DOOMS = [
   'They will be offered exactly what they want. That is the trap.',
 ];
 
+// The draw tables, keyed so the UI can present them one prompt at a time and
+// redraw a single slot without rerolling the rest.
+export const BACKSTORY_TABLES = {
+  ideology: IDEOLOGIES,
+  significantPerson: SIGNIFICANT_PEOPLE,
+  meaningfulLocation: MEANINGFUL_LOCATIONS,
+  treasuredPossession: TREASURED_POSSESSIONS,
+  trait: TRAITS,
+  phobia: PHOBIAS,
+  doom: DOOMS,
+};
+
+/** The ordered backstory prompts (drives the guided walkthrough). */
+export const BACKSTORY_KEYS = Object.keys(BACKSTORY_TABLES);
+
+/** Draw one backstory prompt by key (e.g. redrawing just the treasured possession). */
+export function drawBackstory(key, rng = Math.random) {
+  const table = BACKSTORY_TABLES[key];
+  if (!table) throw new Error(`unknown backstory table: ${key}`);
+  return pick(table, rng);
+}
+
 export function rollBackstory(rng = Math.random) {
-  return {
-    ideology: pick(IDEOLOGIES, rng),
-    significantPerson: pick(SIGNIFICANT_PEOPLE, rng),
-    meaningfulLocation: pick(MEANINGFUL_LOCATIONS, rng),
-    treasuredPossession: pick(TREASURED_POSSESSIONS, rng),
-    trait: pick(TRAITS, rng),
-    phobia: pick(PHOBIAS, rng),
-    doom: pick(DOOMS, rng),
-  };
+  const out = {};
+  for (const key of BACKSTORY_KEYS) out[key] = drawBackstory(key, rng);
+  return out;
 }
 
 // ---------------------------------------------------------------------------

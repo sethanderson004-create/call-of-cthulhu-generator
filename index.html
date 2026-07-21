@@ -185,9 +185,72 @@
     .stat.rolling, .eye { animation: none; }
     button { transition: none; }
   }
+  .hint { font: 13px/1.5 var(--sans); color: var(--ink-faint); text-align: center;
+    max-width: 62ch; margin: 12px auto 0; }
+
+  /* ---- guided walkthrough ---- */
+  #wizard[hidden], #launch[hidden], #sheet[hidden] { display: none; }
+  .steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 14px; padding: 0;
+    justify-content: center; }
+  .steps li { font: 700 10px/1 var(--sans); letter-spacing: 1px; text-transform: uppercase;
+    color: var(--ink-faint); border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; }
+  .steps li.done { color: var(--eldritch); border-color: var(--border-strong); }
+  .steps li.active { color: #06120c; background: var(--eldritch); border-color: transparent; }
+  .wizcard { min-height: 240px; }
+  .wizcard .lead { margin: 0 0 4px; font-size: 21px; font-weight: 700; }
+  .wizcard .lede { margin: 0 0 16px; color: var(--ink-dim); font-style: italic; }
+  .wiznav { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+  .wiznav .spacer { flex: 1; }
+
+  .crow { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+    padding: 13px 0; border-bottom: 1px solid var(--border); }
+  .crow:last-child { border-bottom: 0; }
+  .cabbr { font: 700 12px/1 var(--sans); letter-spacing: 1.5px; color: var(--eldritch-deep); }
+  .cname { font-weight: 700; margin-left: 7px; }
+  .cgov { font-size: 12.5px; color: var(--ink-faint); margin-top: 3px; }
+  .cremark { font-size: 13px; color: var(--ink-dim); font-style: italic; margin-top: 4px; min-height: 1.1em; }
+  .cval { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 54px;
+    text-align: center; color: var(--ink-faint); }
+  .cval.set { color: var(--ink); }
+  .cval.crit { color: var(--gold); text-shadow: 0 0 16px rgba(217,164,65,0.5); }
+  .cval.fumble { color: var(--blood); }
+  .cact button { min-width: 84px; }
+
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .occ-card { text-align: left; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; cursor: pointer; color: var(--ink);
+    transition: border-color .15s, transform .08s; font: inherit; }
+  .occ-card:hover { border-color: var(--border-strong); color: var(--ink); }
+  .occ-card:active { transform: translateY(1px); }
+  .occ-card.sel { border-color: var(--eldritch); box-shadow: inset 0 0 0 1px var(--eldritch); }
+  .occ-card .oc-cr { float: right; font: 600 11px/1 var(--sans); color: var(--gold); }
+  .occ-card .oc-name { font-weight: 700; }
+  .occ-card .oc-blurb { font-size: 12.5px; color: var(--ink-dim); font-style: italic; margin: 7px 0; }
+  .occ-card .oc-skills { font-size: 12px; color: var(--ink-faint); }
+
+  .slot { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 10px; }
+  .slot-lbl { font: 700 10px/1 var(--sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--eldritch-deep); }
+  .slot-txt { margin-top: 8px; color: var(--ink); }
+  .slot-txt.empty { color: var(--ink-faint); font-style: italic; }
+  .slot-act { margin-top: 10px; display: flex; gap: 8px; }
+  .slot-act button { padding: 6px 11px; font-size: 13px; }
+
+  .reveal-lg { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rowbtns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+  .sliderRow { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+  .sliderRow input[type="range"] { flex: 1; accent-color: var(--eldritch); }
+  .sliderRow output { font: 700 15px/1 var(--sans); min-width: 84px; }
+  .txt { width: 100%; font: 16px/1.4 var(--serif); color: var(--ink); background: var(--surface-2);
+    border: 1px solid var(--border-strong); border-radius: 10px; padding: 11px 13px; margin-top: 10px; }
+
+  @keyframes flipin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .reveal-anim { animation: flipin .22s ease; }
+
+  @media (prefers-reduced-motion: reduce) { .reveal-anim { animation: none; } }
   @media print {
     body { background: #fff; color: #111; }
-    .summon, .actions, footer, .toast, .stat .reroll { display: none !important; }
+    #launch, #wizard, .actions, footer, .toast, .stat .reroll { display: none !important; }
     .card { box-shadow: none; border-color: #ccc; break-inside: avoid; }
   }
 </style>
@@ -206,28 +269,45 @@
     </svg>
     <p class="kicker">Call of Cthulhu · 7th Edition</p>
     <h1>Roll the Bones</h1>
-    <p class="sub">Summon a doomed investigator — rolled characteristics, a period name, an
-      occupation, and a backstory the Keeper can twist against you. Tap any stat to re-roll just that one.</p>
+    <p class="sub">Conjure a doomed investigator — characteristics, a period name, an occupation, and
+      a backstory the Keeper can twist against you. Build one <em>piece by piece</em> to feel it take
+      shape, or let fate hand you a whole soul at once.</p>
   </header>
 
-  <div class="summon">
-    <button id="summon" class="primary">🎲 Summon an Investigator</button>
-    <div class="field">
-      <label for="occ">Calling</label>
-      <select id="occ"><option value="">Fate decides…</option></select>
+  <div id="launch">
+    <div class="summon">
+      <button id="guided" class="primary">🕯️ Create step by step</button>
+      <button id="summon" class="ghost">🎲 Summon instantly</button>
+      <div class="field">
+        <label for="occ">Calling</label>
+        <select id="occ"><option value="">Fate decides…</option></select>
+      </div>
+      <div class="field">
+        <label for="gender">Name style</label>
+        <select id="gender">
+          <option value="">Any</option>
+          <option value="feminine">Feminine</option>
+          <option value="masculine">Masculine</option>
+          <option value="neutral">Neutral</option>
+        </select>
+      </div>
     </div>
-    <div class="field">
-      <label for="gender">Name style</label>
-      <select id="gender">
-        <option value="">Any</option>
-        <option value="feminine">Feminine</option>
-        <option value="masculine">Masculine</option>
-        <option value="neutral">Neutral</option>
-      </select>
-    </div>
+    <p class="hint">The walkthrough rolls each stat, then walks you through age, calling, and backstory
+      one prompt at a time. (Calling &amp; name style above apply to the instant summon.)</p>
   </div>
 
-  <div id="empty" class="placeholder">The slab is empty. Roll the bones to see who answers.</div>
+  <section id="wizard" hidden>
+    <ol class="steps" id="steps"></ol>
+    <div class="card wizcard"><div id="stepBody"></div></div>
+    <div class="wiznav">
+      <button id="wizBack" class="ghost">← Back</button>
+      <span class="spacer"></span>
+      <button id="wizQuit" class="ghost">✕ Cancel</button>
+      <button id="wizNext" class="primary">Next →</button>
+    </div>
+  </section>
+
+  <div id="empty" class="placeholder">The slab is empty. Choose your path above to begin.</div>
 
   <section id="sheet" hidden>
     <div class="card" id="identCard">
@@ -271,6 +351,7 @@
       <button id="rerollStory" class="ghost">📖 New backstory</button>
       <button id="copy" class="ghost">📋 Copy sheet</button>
       <button id="print" class="ghost">🖨 Print</button>
+      <button id="startover" class="ghost">↺ Start over</button>
     </div>
   </section>
 
@@ -284,9 +365,10 @@
 
 <script type="module">
 import {
-  makeInvestigator, rollCharacteristic, rollName, rollBackstory,
-  deriveAttributes, characteristicName, OCCUPATIONS, CHARACTERISTICS,
-} from './src/cthulhu.js?v=1';
+  makeInvestigator, rollCharacteristic, rollName, rollAge, rollBackstory, drawBackstory,
+  deriveAttributes, ageDescriptor, buildOccupation, characteristicName, roll,
+  OCCUPATIONS, CHARACTERISTICS, BACKSTORY_KEYS,
+} from './src/cthulhu.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -509,10 +591,368 @@ async function copySheet() {
   }
 }
 
+// =========================================================================
+// Guided walkthrough — build an investigator one piece at a time.
+// =========================================================================
+
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// What each characteristic governs, plus a remark keyed off the rolled value.
+const CHAR_INFO = {
+  STR: { governs: 'Raw muscle — how hard you hit and how much you can move.',
+    band: (v) => v >= 75 ? 'You could bend an iron bar. People notice.'
+      : v >= 45 ? 'Capable hands; you hold your own in a scuffle.'
+      : 'Not one for brute force — best avoid the wrestling.' },
+  CON: { governs: 'Health and stamina — resisting poison, illness, the long night.',
+    band: (v) => v >= 75 ? 'An ox constitution; you shrug off what fells others.'
+      : v >= 45 ? 'Reasonably hardy.' : 'Frail. The damp gets into your chest.' },
+  SIZ: { governs: 'Height and mass — feeds hit points and how far you can be thrown.',
+    band: (v) => v >= 75 ? 'Tall and heavy; you fill a doorway.'
+      : v >= 45 ? 'An average build.' : 'Small and slight — easy to underestimate.' },
+  DEX: { governs: 'Agility and speed — dodging, deft hands, acting first.',
+    band: (v) => v >= 75 ? 'Quick as a cat; nothing catches you flat-footed.'
+      : v >= 45 ? 'Steady and nimble enough.' : 'Clumsy fingers, slow feet.' },
+  APP: { governs: 'Looks and charm — first impressions and doors a smile opens.',
+    band: (v) => v >= 75 ? 'Striking. Rooms turn when you enter.'
+      : v >= 45 ? 'Pleasant, unremarkable.' : 'Forgettable at best; unsettling at worst.' },
+  INT: { governs: 'Reasoning and memory — spotting clues, your Idea rolls.',
+    band: (v) => v >= 75 ? 'A razor mind; you see the pattern before the pieces.'
+      : v >= 45 ? 'Sharp enough.' : 'Not the quickest study.' },
+  POW: { governs: 'Willpower and spirit — magic, luck, and above all Sanity.',
+    band: (v) => v >= 75 ? 'An iron will; the dark pushes and you push back.'
+      : v >= 45 ? 'A steady soul.' : 'A thin candle against a long night.' },
+  EDU: { governs: 'Schooling and book-learning — your skill points, your Know rolls.',
+    band: (v) => v >= 75 ? 'Deeply learned; letters after your name.'
+      : v >= 45 ? 'Well enough schooled.' : 'Little formal education — the street taught you.' },
+};
+
+const STORY_SLOTS = [
+  ['ideology', 'Ideology / Belief'],
+  ['significantPerson', 'A Significant Person'],
+  ['meaningfulLocation', 'A Meaningful Location'],
+  ['treasuredPossession', 'A Treasured Possession'],
+  ['trait', 'A Defining Trait'],
+  ['phobia', 'A Private Fear'],
+];
+
+let draft = null;
+let step = 0;
+
+const STEPS = [
+  { label: 'Roll', render: stepChars, can: () => CHARACTERISTICS.every((k) => draft.chars[k] != null) },
+  { label: 'Age', render: stepAge, can: () => draft.age != null },
+  { label: 'Vitals', render: stepVitals, can: () => draft.luck != null },
+  { label: 'Calling', render: stepOcc, can: () => !!draft.occupation },
+  { label: 'Story', render: stepStory, can: () => STORY_SLOTS.every(([k]) => draft.backstory[k]) },
+  { label: 'Name', render: stepName, can: () => !!(draft.name && draft.name.full) },
+];
+
+function flashNumber(el, finalVal, roller) {
+  if (reduceMotion) { el.textContent = finalVal; return; }
+  let ticks = 6;
+  const spin = setInterval(() => {
+    el.textContent = roller();
+    if (--ticks <= 0) { clearInterval(spin); el.textContent = finalVal; }
+  }, 45);
+}
+
+function startGuided() {
+  draft = { chars: {}, age: 28, luck: null, occupation: null, occChoice: null, backstory: {}, name: null };
+  step = 0;
+  $('launch').hidden = true;
+  $('empty').hidden = true;
+  $('sheet').hidden = true;
+  $('wizard').hidden = false;
+  renderStep();
+  $('wizard').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
+
+function backToStart() {
+  $('wizard').hidden = true;
+  $('sheet').hidden = true;
+  $('launch').hidden = false;
+  $('empty').hidden = false;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+function renderStepDots() {
+  const ol = $('steps');
+  ol.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.textContent = s.label;
+    if (i === step) li.classList.add('active');
+    else if (i < step) li.classList.add('done');
+    ol.appendChild(li);
+  });
+}
+
+function updateNav() { $('wizNext').disabled = !STEPS[step].can(); }
+
+function renderStep() {
+  renderStepDots();
+  STEPS[step].render($('stepBody'));
+  $('wizBack').disabled = step === 0;
+  $('wizNext').textContent = step === STEPS.length - 1 ? '✦ Reveal' : 'Next →';
+  updateNav();
+}
+
+// ---- step 1: characteristics ----
+function stepChars(el) {
+  el.innerHTML =
+    `<p class="lead">Roll the bones</p>` +
+    `<p class="lede">Eight numbers decide what your investigator can do. Roll them one at a time — feel each land.</p>` +
+    `<div id="crows"></div>` +
+    `<div class="rowbtns"><button id="rollAll" class="ghost">🎲 Roll all remaining</button>` +
+    `<span class="cgov" id="rollCount"></span></div>`;
+  const rows = el.querySelector('#crows');
+  const updateCount = () => {
+    const n = CHARACTERISTICS.filter((k) => draft.chars[k] != null).length;
+    el.querySelector('#rollCount').textContent = `Rolled ${n} of ${CHARACTERISTICS.length}.`;
+  };
+  for (const key of CHARACTERISTICS) {
+    const info = CHAR_INFO[key];
+    const row = document.createElement('div');
+    row.className = 'crow';
+    row.dataset.k = key;
+    row.innerHTML =
+      `<div><span class="cabbr">${key}</span><span class="cname">${characteristicName(key)}</span>` +
+      `<div class="cgov">${info.governs}</div><div class="cremark" data-remark></div></div>` +
+      `<div class="cval" data-val>—</div>` +
+      `<div class="cact"><button class="roll1 primary">🎲 Roll</button></div>`;
+    const valEl = row.querySelector('[data-val]');
+    const remarkEl = row.querySelector('[data-remark]');
+    const btn = row.querySelector('.roll1');
+    const settle = (v) => {
+      valEl.className = 'cval set ' + statClass(key, v);
+      remarkEl.textContent = info.band(v);
+      btn.textContent = '↻ Reroll';
+      btn.classList.remove('primary');
+    };
+    btn.addEventListener('click', () => {
+      const v = rollCharacteristic(key);
+      draft.chars[key] = v;
+      valEl.className = 'cval set ' + statClass(key, v);
+      flashNumber(valEl, v, () => rollCharacteristic(key));
+      setTimeout(() => { remarkEl.textContent = info.band(v); }, reduceMotion ? 0 : 290);
+      btn.textContent = '↻ Reroll';
+      btn.classList.remove('primary');
+      updateCount(); updateNav();
+    });
+    if (draft.chars[key] != null) { valEl.textContent = draft.chars[key]; settle(draft.chars[key]); }
+    rows.appendChild(row);
+  }
+  el.querySelector('#rollAll').addEventListener('click', () => {
+    for (const row of rows.querySelectorAll('.crow')) {
+      if (draft.chars[row.dataset.k] == null) row.querySelector('.roll1').click();
+    }
+  });
+  updateCount();
+}
+
+// ---- step 2: age ----
+function stepAge(el) {
+  el.innerHTML =
+    `<p class="lead">How old are they?</p>` +
+    `<p class="lede">Age colors who your investigator is — and the years eventually cost you speed.</p>` +
+    `<div class="sliderRow"><input type="range" id="ageR" min="15" max="89" value="${draft.age}"/>` +
+    `<output id="ageOut"></output></div>` +
+    `<p class="cremark" id="ageDesc"></p><p class="cgov" id="ageMove"></p>` +
+    `<div class="rowbtns"><button id="ageRoll" class="ghost">🎲 Roll my age</button></div>`;
+  const r = el.querySelector('#ageR');
+  const upd = () => {
+    draft.age = +r.value;
+    el.querySelector('#ageOut').textContent = draft.age + ' years';
+    el.querySelector('#ageDesc').textContent = cap(ageDescriptor(draft.age)) + '.';
+    el.querySelector('#ageMove').textContent =
+      `Move rate at this age: ${deriveAttributes(draft.chars, draft.age).move}.`;
+    updateNav();
+  };
+  r.addEventListener('input', upd);
+  el.querySelector('#ageRoll').addEventListener('click', () => { r.value = rollAge(); upd(); });
+  upd();
+}
+
+// ---- step 3: derived vitals + luck ----
+function stepVitals(el) {
+  const a = deriveAttributes(draft.chars, draft.age);
+  el.innerHTML =
+    `<p class="lead">What the numbers make of you</p>` +
+    `<p class="lede">These follow from your characteristics. One thing is still down to fate.</p>` +
+    `<div class="vitals" id="vpreview"></div>` +
+    `<div class="card" style="margin:16px 0 0;background:rgba(217,164,65,0.06);border-color:rgba(217,164,65,0.3)">` +
+    `<p class="cgov" style="margin-top:0">Luck is rolled on its own — 3d6×5. It can pull you out of a grave. Spend it wisely.</p>` +
+    `<div id="luckArea"></div></div>`;
+  const items = [
+    ['Hit Points', a.hitPoints, '(CON + SIZ) ÷ 10 — how much harm you can take.'],
+    ['Sanity', a.sanity, `Begins at POW (${draft.chars.POW}). Your grip on reality — it only falls.`],
+    ['Magic Points', a.magicPoints, 'POW ÷ 5 — fuel for the strange.'],
+    ['Move', a.move, 'On foot — from STR/DEX against SIZ, and your age.'],
+    ['Damage Bonus', a.damageBonus, 'Added to hand-to-hand damage (STR + SIZ).'],
+    ['Build', a.build, 'Grappling and being shoved around.'],
+    ['Dodge', a.dodge, 'Half your DEX — getting out of the way.'],
+  ];
+  const vp = el.querySelector('#vpreview');
+  for (const [lbl, val, note] of items) {
+    const d = document.createElement('div');
+    d.className = 'vital';
+    d.innerHTML = `<div class="lbl">${lbl}</div><div class="big">${val}</div>` +
+      `<div class="cgov" style="margin-top:6px">${note}</div>`;
+    vp.appendChild(d);
+  }
+  const luckArea = el.querySelector('#luckArea');
+  const renderLuck = () => {
+    if (draft.luck == null) {
+      luckArea.innerHTML = `<button id="luckBtn" class="primary">🍀 Test your Luck</button>`;
+      luckArea.querySelector('#luckBtn').addEventListener('click', () => {
+        draft.luck = roll(3, 6).total * 5; renderLuck(); updateNav();
+      });
+    } else {
+      luckArea.innerHTML =
+        `<div class="reveal-lg reveal-anim" style="color:var(--gold)">${draft.luck}</div>` +
+        `<button id="luckRe" class="ghost" style="margin-top:8px">↻ Again</button>`;
+      luckArea.querySelector('#luckRe').addEventListener('click', () => {
+        draft.luck = roll(3, 6).total * 5; renderLuck();
+      });
+    }
+  };
+  renderLuck();
+}
+
+// ---- step 4: occupation ----
+function stepOcc(el) {
+  el.innerHTML =
+    `<p class="lead">Before the horror found them…</p>` +
+    `<p class="lede">Choose a calling. It sets your signature skills, your standing, and how the world reads you.</p>` +
+    `<div class="rowbtns" style="margin:0 0 12px"><button id="occRand" class="ghost">🎲 Choose for me</button></div>` +
+    `<div class="choices" id="occCards"></div><div id="occDetail" style="margin-top:14px"></div>`;
+  const cards = el.querySelector('#occCards');
+  const detail = el.querySelector('#occDetail');
+  const select = (name, opts = {}) => {
+    let built;
+    if (draft.occupation && draft.occupation.name === name && !opts.reroll) built = draft.occupation;
+    else built = buildOccupation(name, draft.chars);
+    draft.occupation = built; draft.occChoice = name;
+    for (const c of cards.children) c.classList.toggle('sel', c.dataset.n === name);
+    detail.innerHTML =
+      `<div class="card" style="margin:0">` +
+      `<p class="pointsnote" style="margin-bottom:8px">Credit Rating <b>${built.creditRating}</b> · ` +
+      `spend <b>${built.occupationPoints}</b> occupation points + <b>${built.personalInterestPoints}</b> personal-interest points.</p>` +
+      `<div class="skills"><ul>${built.skills.map((s) => `<li><span class="skname">${s}</span></li>`).join('')}</ul></div></div>`;
+    updateNav();
+  };
+  for (const o of OCCUPATIONS) {
+    const c = document.createElement('button');
+    c.className = 'occ-card';
+    c.dataset.n = o.name;
+    c.innerHTML =
+      `<span class="oc-cr">CR ${o.creditRating[0]}–${o.creditRating[1]}</span>` +
+      `<div class="oc-name">${o.emoji} ${o.name}</div>` +
+      `<div class="oc-blurb">${o.blurb}</div>` +
+      `<div class="oc-skills">${o.skills.slice(0, 4).join(' · ')} …</div>`;
+    c.addEventListener('click', () => select(o.name));
+    cards.appendChild(c);
+  }
+  el.querySelector('#occRand').addEventListener('click', () => {
+    const o = OCCUPATIONS[Math.floor(Math.random() * OCCUPATIONS.length)];
+    select(o.name, { reroll: true });
+    cards.querySelector(`[data-n="${o.name}"]`)?.scrollIntoView({ block: 'nearest' });
+  });
+  if (draft.occChoice) select(draft.occChoice);
+}
+
+// ---- step 5: backstory, drawn slot by slot ----
+function stepStory(el) {
+  el.innerHTML =
+    `<p class="lead">Who are they, really?</p>` +
+    `<p class="lede">Draw each thread of their history. Don't like one? Draw it again until it feels right.</p>` +
+    `<div id="slots"></div>` +
+    `<div class="rowbtns"><button id="drawAll" class="ghost">🎴 Draw them all</button></div>`;
+  const slots = el.querySelector('#slots');
+  for (const [key, label] of STORY_SLOTS) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.innerHTML =
+      `<div class="slot-lbl">${label}</div><div class="slot-txt empty" data-txt>— not yet drawn —</div>` +
+      `<div class="slot-act" data-act></div>`;
+    const txt = slot.querySelector('[data-txt]');
+    const act = slot.querySelector('[data-act]');
+    const render = () => {
+      if (draft.backstory[key]) {
+        txt.className = 'slot-txt reveal-anim';
+        txt.textContent = draft.backstory[key];
+        act.innerHTML = `<button class="ghost">↻ Draw again</button>`;
+      } else {
+        txt.className = 'slot-txt empty';
+        txt.textContent = '— not yet drawn —';
+        act.innerHTML = `<button class="primary">🎴 Draw</button>`;
+      }
+      act.querySelector('button').onclick = () => {
+        draft.backstory[key] = drawBackstory(key); render(); updateNav();
+      };
+    };
+    render();
+    slots.appendChild(slot);
+  }
+  el.querySelector('#drawAll').addEventListener('click', () => {
+    for (const [key] of STORY_SLOTS) if (!draft.backstory[key]) draft.backstory[key] = drawBackstory(key);
+    stepStory(el); updateNav();
+  });
+}
+
+// ---- step 6: name ----
+function stepName(el) {
+  el.innerHTML =
+    `<p class="lead">Name your investigator</p>` +
+    `<p class="lede">The last thing to fix before the sheet is theirs. Roll a period name, or write your own.</p>` +
+    `<div class="field" style="display:block;max-width:220px"><label for="nStyle">Name style</label>` +
+    `<select id="nStyle"><option value="">Any</option><option value="feminine">Feminine</option>` +
+    `<option value="masculine">Masculine</option><option value="neutral">Neutral</option></select></div>` +
+    `<div class="rowbtns"><button id="nameRoll" class="primary">🎭 Roll a name</button></div>` +
+    `<input class="txt" id="nameField" type="text" placeholder="Investigator name" />`;
+  const field = el.querySelector('#nameField');
+  field.value = draft.name ? draft.name.full : '';
+  const sync = () => { draft.name = { full: field.value.trim() }; updateNav(); };
+  field.addEventListener('input', sync);
+  el.querySelector('#nameRoll').addEventListener('click', () => {
+    const n = rollName(Math.random, el.querySelector('#nStyle').value || undefined);
+    field.value = n.full; draft.name = n; updateNav();
+  });
+  sync();
+}
+
+// ---- assemble the finished investigator ----
+function finishGuided() {
+  draft.backstory.doom = drawBackstory('doom');
+  inv = {
+    name: draft.name,
+    age: draft.age,
+    ageDescriptor: ageDescriptor(draft.age),
+    characteristics: draft.chars,
+    luck: draft.luck,
+    attributes: deriveAttributes(draft.chars, draft.age),
+    occupation: draft.occupation,
+    backstory: draft.backstory,
+  };
+  $('wizard').hidden = true;
+  $('launch').hidden = true;
+  renderAll();
+  $('sheet').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
+
 // ---- wiring -------------------------------------------------------------
 
+$('guided').addEventListener('click', startGuided);
 $('summon').addEventListener('click', summon);
 $('reroll').addEventListener('click', summon);
+$('startover').addEventListener('click', backToStart);
+$('wizBack').addEventListener('click', () => { if (step > 0) { step--; renderStep(); } });
+$('wizQuit').addEventListener('click', backToStart);
+$('wizNext').addEventListener('click', () => {
+  if (!STEPS[step].can()) return;
+  if (step === STEPS.length - 1) return finishGuided();
+  step++; renderStep();
+});
 $('rerollName').addEventListener('click', () => {
   inv.name = rollName(Math.random, $('gender').value || undefined);
   renderIdentity();
@@ -524,8 +964,15 @@ $('rerollStory').addEventListener('click', () => {
 $('copy').addEventListener('click', copySheet);
 $('print').addEventListener('click', () => window.print());
 
-// Expose a hook for Playwright checks.
-window.__cthulhu = { get: () => inv, summon };
+// Expose hooks for Playwright checks.
+window.__cthulhu = {
+  get: () => inv,
+  summon,
+  startGuided,
+  draft: () => draft,
+  step: () => step,
+  next: () => $('wizNext').click(),
+};
 </script>
 </body>
 </html>

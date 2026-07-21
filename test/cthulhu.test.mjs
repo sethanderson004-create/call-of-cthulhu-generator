@@ -12,10 +12,13 @@ import {
   buildOccupation,
   occupationByName,
   rollBackstory,
+  drawBackstory,
   rollName,
   makeInvestigator,
   CHARACTERISTICS,
   OCCUPATIONS,
+  BACKSTORY_TABLES,
+  BACKSTORY_KEYS,
 } from '../src/cthulhu.js';
 
 // A tiny deterministic RNG (mulberry32) so tests can pin randomness.
@@ -153,6 +156,22 @@ test('rollBackstory fills every narrative slot', () => {
     assert.equal(typeof b[k], 'string');
     assert.ok(b[k].length > 0, `${k} empty`);
   }
+});
+
+test('drawBackstory returns a member of the requested table, and guards bad keys', () => {
+  const rng = seeded(101);
+  for (const key of BACKSTORY_KEYS) {
+    for (let i = 0; i < 50; i++) {
+      const v = drawBackstory(key, rng);
+      assert.ok(BACKSTORY_TABLES[key].includes(v), `${key} drew a non-member: ${v}`);
+    }
+  }
+  assert.throws(() => drawBackstory('not-a-table', rng));
+});
+
+test('rollBackstory covers exactly the declared keys', () => {
+  const b = rollBackstory(seeded(102));
+  assert.deepEqual(Object.keys(b).sort(), [...BACKSTORY_KEYS].sort());
 });
 
 test('rollName honors requested gender pool and always has both parts', () => {

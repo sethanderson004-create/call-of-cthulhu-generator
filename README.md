@@ -1,10 +1,18 @@
 # 🎲 Roll the Bones — Call of Cthulhu Investigator Generator
 
 A zero-dependency, browser-only generator for **Call of Cthulhu 7th-edition**
-investigators. One tap summons a complete, doom-touched character: rolled
-characteristics, derived attributes, a Jazz Age name, an occupation with a
-themed skill spread, and a randomized backstory the Keeper can twist against
-the player.
+investigators. Two ways to play:
+
+- **🕯️ Create step by step** — a guided walkthrough that rolls each
+  characteristic one at a time (with a note on what it governs and a remark on
+  your result), then walks you through age, vitals + a Luck roll, occupation,
+  and backstory drawn one prompt at a time — so you *feel* the investigator
+  take shape.
+- **🎲 Summon instantly** — one tap for a complete, doom-touched character.
+
+Either way you get rolled characteristics, derived attributes, a Jazz Age name,
+an occupation with a themed skill spread, and a randomized backstory the Keeper
+can twist against the player.
 
 **▶ Live:** https://sethanderson004-create.github.io/call-of-cthulhu-generator/
 
