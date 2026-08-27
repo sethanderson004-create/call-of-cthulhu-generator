@@ -23,6 +23,29 @@ can twist against the player.
 No build step, no framework, no server — plain ES modules and a single HTML
 file. Every roll happens locally in your browser.
 
+## 🏙️ Also in this repo: Monopolis
+
+A second, unrelated toy that shares the same house rules (zero dependencies,
+pure engine + tested logic, one HTML file for the UI):
+
+**Monopolis** is a real-time strategy game in the shape of [openfront.io](https://openfront.io),
+except you're not conquering land — you're cornering markets.
+
+- The board is a grid of **districts**, each with a demand value and a sector.
+- Holding a district pays revenue every second; owning its neighbours adds a
+  **synergy bonus**, so clustered positions compound.
+- **Expansion is spending.** Click any district on your border to pour capital
+  into it in real time. Unclaimed markets are cheap; buying out a rival's
+  **stake** costs more per dollar.
+- Districts you hold **entrench** over time, so an unanswered lead is expensive
+  to reverse.
+- The **reinvestment** slider sets how much of your treasury goes into
+  expansion each second — the rest compounds.
+- Three AI firms play by the same rules. First to **60% of total market
+  demand** wins the monopoly; you can also win by outlasting everyone.
+
+Open `monopolis.html` (engine: `src/monopolis.js`, tests: `test/monopolis.test.mjs`).
+
 ## What it generates
 
 - **Characteristics** — STR, CON, SIZ, DEX, APP, INT, POW, EDU rolled on the
