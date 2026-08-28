@@ -184,8 +184,13 @@ const FORTIFY_RATE = 0.32;
  * and expensive in time as well as money. Without this the mid-game froze:
  * defence outran any attack anyone could afford, and a board of four firms
  * sat at 17-29% for two solid minutes with nothing able to move.
+ *
+ * The first value that unfroze it went too far the other way: a three-minute
+ * game where the two firms that fell behind were ground down to 4% and 9%.
+ * Halved, the board still moves but a loss is a setback rather than a
+ * dismantling.
  */
-const SIEGE_WEAR = 0.055;
+const SIEGE_WEAR = 0.026;
 
 const SECTORS = [
   'Coffee', 'Grocery', 'Convenience', 'Snacks', 'Beverages', 'Restaurants',
