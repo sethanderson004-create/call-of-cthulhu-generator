@@ -161,7 +161,7 @@ const NEUTRAL = '#2b3a49';
 
 const INCOME = 0.42;       // capital per second per point of held weight
 const PUSH = 0.34;         // share taken per second per unit of pressure
-const PRESSURE_TAU = 2.8;  // seconds for massed capital to fade once you stop
+const PRESSURE_TAU = 4.5;  // seconds for massed capital to fade once you stop
 const RIVAL_COST = 3.4;    // taking held share costs this much more than open share
 const LOYALTY = 34;        // seconds for share to become fully entrenched
 const WIN = 0.5;
@@ -177,6 +177,15 @@ const PRICING_POWER = 0.8;
 
 /** Fortifying converts money into loyalty instead of share. */
 const FORTIFY_RATE = 0.32;
+
+/**
+ * Siege. A position under sustained pressure loses loyalty, so no amount of
+ * fortifying makes a market permanently untakeable — it makes it expensive,
+ * and expensive in time as well as money. Without this the mid-game froze:
+ * defence outran any attack anyone could afford, and a board of four firms
+ * sat at 17-29% for two solid minutes with nothing able to move.
+ */
+const SIEGE_WEAR = 0.055;
 
 const SECTORS = [
   'Coffee', 'Grocery', 'Convenience', 'Snacks', 'Beverages', 'Restaurants',
@@ -276,7 +285,7 @@ function step(dt) {
       if (firm.mode === 'fortify') {
         // Money into loyalty rather than share: slower to matter, but it is
         // what makes a position expensive to take off you.
-        segment.held[firm.id] = Math.min(LOYALTY * 1.6,
+        segment.held[firm.id] = Math.min(LOYALTY * 1.4,
           segment.held[firm.id] + spend * FORTIFY_RATE);
         segment.shield = Math.min(1, (segment.shield ?? 0) + spend * 0.02);
       } else {
@@ -308,7 +317,7 @@ function step(dt) {
           .filter((other) => other.id !== firm.id && segment.shares[other.id] > 0.001)
           .sort((a, b) => segment.shares[b.id] - segment.shares[a.id])[0];
         if (victim) {
-          const entrenched = 1 + 4 * Math.min(1.6, segment.held[victim.id] / LOYALTY);
+          const entrenched = 1 + 3.2 * Math.min(1.4, segment.held[victim.id] / LOYALTY);
           const taken = Math.min(segment.shares[victim.id], force / (RIVAL_COST * entrenched));
           segment.shares[victim.id] -= taken;
           segment.shares[firm.id] += taken;
@@ -321,6 +330,18 @@ function step(dt) {
         }
       }
       segment.pressure[firm.id] = pressure * Math.exp(-dt / PRESSURE_TAU);
+    }
+
+    // Everyone holding here feels the weight of everyone pushing here.
+    const siege = world.firms.reduce((sum, firm) => sum + segment.pressure[firm.id], 0);
+    if (siege > 6) {
+      for (const firm of world.firms) {
+        if (segment.shares[firm.id] <= 0.02) continue;
+        const theirs = segment.pressure[firm.id];
+        const against = siege - theirs;
+        if (against <= 6) continue;
+        segment.held[firm.id] = Math.max(0, segment.held[firm.id] - against * SIEGE_WEAR * dt);
+      }
     }
 
     for (const firm of world.firms) {
@@ -686,7 +707,7 @@ function paintPanel() {
       const settled = segment.held[0] / LOYALTY;
       el('targetOut').innerHTML = `Holding <b>${segment.name}</b> — $${you.spending.toFixed(1)}/s into loyalty`
         + `<span class="hint">${settled >= 1
-          ? `fortified ×${(1 + 4 * Math.min(1.6, settled)).toFixed(1)} to take`
+          ? `fortified ×${(1 + 3.2 * Math.min(1.4, settled)).toFixed(1)} to take`
           : `${(settled * 100).toFixed(0)}% settled`}`
         + `${incoming > 4 ? ' · under attack' : ''}</span>`;
     } else {
