@@ -136,6 +136,8 @@
   A dashed line shows money leaving your hub for a market, labelled with what it costs per second —
   yours and everyone else's. Once you hold more than half of a market you set the price there and it
   pays more than its size, so finishing a market competes with starting another.<br><br>
+  Past about a quarter of the economy you start losing income to scrutiny, and it bites harder the
+  closer anyone comes to owning half — so the last stretch is the hardest one.<br><br>
   Segments are markets, sized by how big they are. Colour fills outward from the hub as a firm takes
   share; a full spoke is a cornered market. You can only push into a segment touching one you hold.
   Brightness on a border is capital massing there — it shows a few seconds before share starts moving,
@@ -174,6 +176,21 @@ const WIN = 0.5;
  * "take the next one".
  */
 const PRICING_POWER = 0.8;
+
+/**
+ * Scrutiny. Past a certain size a firm earns less of what it takes: lawyers,
+ * regulators, the political cost of being the obvious villain. It is the
+ * counterweight to pricing power — dominating a market should pay, but
+ * dominating the economy should get harder the closer you come.
+ *
+ * It exists because of a measurement: with pricing power in and no drag, every
+ * game ended at three minutes with the leader on 50% and the bottom two firms
+ * on 3% and 11%. Halving the siege wear changed nothing, which is what showed
+ * the snowball was coming from the earning bonus rather than from combat.
+ */
+const SCRUTINY = 0.55;
+const SCRUTINY_FROM = 0.28;
+const SCRUTINY_FULL = 0.52;
 
 /** Fortifying converts money into loyalty instead of share. */
 const FORTIFY_RATE = 0.32;
@@ -245,7 +262,15 @@ const power = (share) => 1 + PRICING_POWER * Math.max(0, share - 0.5) * 2;
 const yieldOf = (segment, id) =>
   segment.weight * segment.shares[id] * INCOME * power(segment.shares[id]);
 
-const incomeOf = (id) => world.segments.reduce((sum, s) => sum + yieldOf(s, id), 0);
+/** How much of what a firm earns it actually keeps, given its size. */
+const scrutiny = (id) => {
+  const share = shareOf(id);
+  const over = (share - SCRUTINY_FROM) / (SCRUTINY_FULL - SCRUTINY_FROM);
+  return 1 - SCRUTINY * Math.max(0, Math.min(1, over));
+};
+
+const grossOf = (id) => world.segments.reduce((sum, s) => sum + yieldOf(s, id), 0);
+const incomeOf = (id) => grossOf(id) * scrutiny(id);
 const open = (segment) => Math.max(0, 1 - segment.shares.reduce((a, b) => a + b, 0));
 
 /** A firm may push into a segment it holds, or one touching a segment it holds. */
@@ -684,9 +709,12 @@ function paintPanel() {
   const you = world.firms[0];
   el('shareOut').textContent = `${(shareOf(0) * 100).toFixed(1)}%`;
   const income = incomeOf(0);
+  const gross = grossOf(0);
   const flat = heldWeight(0) * INCOME;
+  const lost = gross - income;
   el('capitalOut').innerHTML = `$${you.capital.toFixed(0)} banked · +$${income.toFixed(1)}/s`
-    + (income > flat * 1.02 ? `<br><span style="color:#e0b357">dominance +$${(income - flat).toFixed(1)}/s</span>` : '');
+    + (gross > flat * 1.02 ? `<br><span style="color:#e0b357">dominance +$${(gross - flat).toFixed(1)}/s</span>` : '')
+    + (lost > 0.05 ? `<br><span style="color:#d4738f">scrutiny −$${lost.toFixed(1)}/s</span>` : '');
 
   const elapsed = (performance.now() - started) / 1000;
   el('clock').textContent = `${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, '0')}`;
