@@ -26,23 +26,45 @@ file. Every roll happens locally in your browser.
 ## 🏙️ Also in this repo: Monopolis
 
 A second, unrelated toy that shares the same house rules (zero dependencies,
-pure engine + tested logic, one HTML file for the UI):
+pure tested engine, one HTML file for the UI): a **real-time strategy game
+about building a business empire** — no map, no armies, just markets.
 
-**Monopolis** is a real-time strategy game in the shape of [openfront.io](https://openfront.io),
-except you're not conquering land — you're cornering markets.
+The economy is eight **markets** (Coffee, Streaming, Airlines, Solar, Fashion,
+Grocery, Semiconductors, Fitness). Each is contested by three or four
+**brands**, owned by you, by three AI conglomerates, or by nobody. Every brand
+sets a **price** and burns cash on **marketing**, and those two numbers decide
+its slice of the market: customers are pulled toward strong brands and pushed
+away by expensive ones — hard in price-sensitive categories like Airlines,
+barely at all in Semiconductors.
 
-- The board is a grid of **districts**, each with a demand value and a sector.
-- Holding a district pays revenue every second; owning its neighbours adds a
-  **synergy bonus**, so clustered positions compound.
-- **Expansion is spending.** Click any district on your border to pour capital
-  into it in real time. Unclaimed markets are cheap; buying out a rival's
-  **stake** costs more per dollar.
-- Districts you hold **entrench** over time, so an unanswered lead is expensive
-  to reverse.
-- The **reinvestment** slider sets how much of your treasury goes into
-  expansion each second — the rest compounds.
-- Three AI firms play by the same rules. First to **60% of total market
-  demand** wins the monopoly; you can also win by outlasting everyone.
+What you actually play with:
+
+- **Price** — charge more for a fatter margin per unit, or undercut to take
+  share. The trade is sharper in elastic markets.
+- **Marketing** — buys brand equity, which is what really wins customers, and
+  which decays the moment you stop paying for it.
+- **Category campaigns** — grow a whole market's demand. It lifts every brand
+  in the category, so it only pays where you already hold the biggest slice.
+- **Acquisitions** — buy a brand and take its entire slice at once.
+  Independents sell at a small premium; a hostile bid on a rival costs 55% over
+  fair value, and the cash goes straight to the rival's war chest.
+- **Debt** — you can borrow against your portfolio to close a deal, and the
+  interest is a real drag when a price war goes badly.
+
+The constraint that makes it a game is that **you can only raid the weak**: a
+rival's brand is takeable when it has been starved below 15% of its market,
+when its parent is over-leveraged, or when you already out-hold that parent in
+that category. So you win a category with price and advertising *first*, then
+buy the losers in it. Meanwhile costs inflate all game, so a three-way
+standoff steadily gets more expensive until someone's balance sheet breaks.
+
+**Win** by taking 50% of all revenue in the economy. **Lose** by being stripped
+of every brand — the AI plays by exactly the same rules, and will come for
+yours the moment your net worth gets thin.
+
+The whole state of the game reads off one screen: a card per market, each with
+a stacked share bar coloured by owner, and every brand's price, equity and
+share underneath it.
 
 Open `monopolis.html` (engine: `src/monopolis.js`, tests: `test/monopolis.test.mjs`).
 
