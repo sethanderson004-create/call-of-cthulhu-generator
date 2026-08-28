@@ -5,3 +5,7 @@ node_modules/
 
 # Standalone build output (regenerate with tools/build-standalone.mjs)
 dist/
+
+# Throwaway harnesses used to drive the browser while prototyping
+*.tmp.mjs
+package-lock.json
