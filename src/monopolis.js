@@ -181,6 +181,9 @@ export const CATEGORY_EDGE = 0.15;
 
 export const FIRM_COLORS = ['#7fd6a1', '#d9a441', '#4aa3d9', '#c2607f', '#9a7fd6', '#d97a45'];
 
+/** How many out-of-territory brands a bot appraises per shopping cycle. */
+export const AI_SCAN_SAMPLE = 30;
+
 export const RIVAL_NAMES = [
   'Halbrook Group', 'Vantor Industries', 'Meridian Partners', 'Colcannon Capital',
   'Ninth Street Holdings', 'Orbis Consolidated', 'Fairmount & Co.', 'Steelyard Ventures',
@@ -235,6 +238,75 @@ export const MARKET_TEMPLATES = [
   },
 ];
 
+
+// ---------------------------------------------------------------------------
+// Procedural naming
+//
+// Eight hand-written markets and their brand lists are plenty for a four-firm
+// game. A hundred-player world needs dozens of markets and hundreds of brands,
+// so beyond the hand-written ones both are generated: sectors repeat across
+// regions ("Coffee · Northside"), and brand names are drawn from stems and
+// suffixes that suit the sector.
+// ---------------------------------------------------------------------------
+
+export const REGIONS = [
+  'Northside', 'Harbour', 'Midlands', 'Westgate', 'Riverside', 'Uptown',
+  'Lakeshore', 'Southbank', 'Old Town', 'Fairview', 'Eastfield', 'Highgate',
+  'Ironworks', 'Meadowbrook', 'Kingsport', 'Brightwater',
+];
+
+export const BRAND_STEMS = [
+  'Ashgrove', 'Corvid', 'Halbrook', 'Larkin', 'Petra', 'Sable', 'Vantor',
+  'Marlowe', 'Orbis', 'Quartz', 'Trellis', 'Kestrel', 'Vireo', 'Bramble',
+  'Copperfield', 'Dawnline', 'Ember', 'Granite', 'Hollow', 'Ivy', 'Juniper',
+  'Kelvin', 'Lumen', 'Meridian', 'Norwood', 'Ordinary', 'Pelagic', 'Ridgeline',
+  'Silica', 'Thornfield', 'Vellum', 'Wexley', 'Yarrow', 'Zenith', 'Aldercroft',
+  'Blackwell', 'Cinder', 'Dovetail', 'Everly', 'Foxglove', 'Glasswing',
+];
+
+export const BRAND_SUFFIXES = {
+  coffee: ['Roasters', 'Coffee', 'Brew Co.', '& Oat'],
+  streaming: ['+', 'TV', 'Play', 'Originals'],
+  airlines: ['Air', 'Airways', 'Jet', 'Skylines'],
+  solar: ['Solar', 'Power', 'Energy', 'Array'],
+  fashion: ['Atelier', 'Label', 'Studio', '& Vane'],
+  grocery: ['Market', 'Grocers', 'Foods', 'Provisions'],
+  chips: ['Micro', 'Systems', 'Dynamics', 'Silicon'],
+  fitness: ['Athletic', 'Gyms', 'Studios', 'Fitness'],
+};
+
+/** A brand name for `sector` that is not already taken in `game`. */
+export function makeBrandName(game, sectorKey, rng = Math.random) {
+  const taken = new Set(game.brands.map((b) => b.name));
+  const suffixes = BRAND_SUFFIXES[sectorKey] ?? ['& Co.', 'Group', 'Works'];
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const name = `${pick(BRAND_STEMS, rng)} ${pick(suffixes, rng)}`;
+    if (!taken.has(name)) return name;
+  }
+  return `Brand ${game.brands.length + 1}`; // Vanishingly unlikely, but total.
+}
+
+/** Firm names for late joiners and bots, unique within the game. */
+export function makeFirmName(game, rng = Math.random) {
+  const taken = new Set(game.firms.map((f) => f.name));
+  for (const name of RIVAL_NAMES) if (!taken.has(name)) return name;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const name = `${pick(BRAND_STEMS, rng)} ${pick(['Holdings', 'Group', 'Partners', 'Capital', 'Industries', 'Ventures'], rng)}`;
+    if (!taken.has(name)) return name;
+  }
+  return `Firm ${game.firms.length + 1}`;
+}
+
+/**
+ * How big a world a given number of firms needs. Everyone should be able to
+ * find a market worth fighting over without every category turning into a
+ * hundred-way scrum.
+ */
+export function worldSize(firmCount) {
+  const markets = clamp(Math.round(4 + firmCount * 0.55), 6, 64);
+  return { markets, seedBrandsPerMarket: 3 };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -259,8 +331,18 @@ export function jitter(center, spread, rng = Math.random) {
  * Build a new economy. Every brand starts independent except one seed brand
  * per conglomerate, so the opening move is always "who do I buy first?".
  */
-export function createGame({ rivals = 3, markets = 6, rng = Math.random } = {}) {
-  const chosen = MARKET_TEMPLATES.slice(0, clamp(markets, 2, MARKET_TEMPLATES.length));
+export function createGame({
+  rivals = 3,
+  players,
+  markets,
+  bots = true,
+  rng = Math.random,
+} = {}) {
+  // `players` is the io-style entry point (how many seats the world is built
+  // for); `rivals` is the original single-player one. Either sizes the world.
+  const seats = players ?? rivals + 1;
+  const marketCount = markets ?? worldSize(seats).markets;
+
   const game = {
     time: 0,
     markets: [],
@@ -270,74 +352,154 @@ export function createGame({ rivals = 3, markets = 6, rng = Math.random } = {}) 
     over: false,
     winner: null,
     outcome: null,
+    seats,
   };
 
-  for (const [i, tpl] of chosen.entries()) {
-    game.markets.push({
+  for (let i = 0; i < marketCount; i++) {
+    const tpl = MARKET_TEMPLATES[i % MARKET_TEMPLATES.length];
+    const round = Math.floor(i / MARKET_TEMPLATES.length);
+    // The first pass uses the hand-written markets; later passes repeat the
+    // sectors across regions, so a big world stays legible ("Coffee ·
+    // Harbour") instead of inventing categories nobody recognises.
+    const name = round === 0 ? tpl.name : `${tpl.name} · ${REGIONS[(round - 1) % REGIONS.length]}`;
+    const market = {
       id: i,
       key: tpl.key,
-      name: tpl.name,
-      baseDemand: tpl.demand,
+      name,
+      baseDemand: Math.round(jitter(tpl.demand, tpl.demand * 0.15, rng)),
       elasticity: tpl.elasticity,
       adPower: tpl.adPower,
       unitCost: tpl.cost,
       buzz: 0,
       categorySpend: 0, // Set by whoever is funding category ads this second.
-      reserve: [...(tpl.reserve ?? [])], // Names available to new entrants.
+      reserve: round === 0 ? [...(tpl.reserve ?? [])] : [],
       brandIds: [],
-    });
-    for (const name of tpl.brands) {
-      const brand = {
-        id: game.brands.length,
-        name,
-        marketId: i,
-        owner: null,
-        price: clamp(jitter(1, 0.12, rng), MIN_PRICE, MAX_PRICE),
-        equity: jitter(38, 12, rng),
-        marketing: 2,
-        share: 0,
-        born: 0,
-        promoUntil: 0,
-        lockedUntil: 0,
-        units: 0,
-        revenue: 0,
-        profit: 0,
-      };
-      game.brands.push(brand);
-      game.markets[i].brandIds.push(brand.id);
+    };
+    game.markets.push(market);
+
+    const names = round === 0 ? tpl.brands : tpl.brands.map(() => null);
+    for (const preset of names) {
+      addBrand(game, market.id, { name: preset ?? makeBrandName(game, tpl.key, rng), rng });
     }
   }
 
-  const names = [...RIVAL_NAMES];
-  for (let i = 0; i <= rivals; i++) {
-    game.firms.push({
-      id: i,
-      name: i === 0 ? 'Your Holdings' : names.splice(Math.floor(rng() * names.length), 1)[0],
-      color: FIRM_COLORS[i % FIRM_COLORS.length],
+  for (let i = 0; i < seats; i++) {
+    addFirm(game, {
+      name: i === 0 ? 'Your Holdings' : makeFirmName(game, rng),
       human: i === 0,
-      cash: STARTING_CASH,
-      debt: 0,
-      boughtOut: false,
-      cooldown: 0, // Seconds until this AI considers another acquisition.
-      actionReady: {}, // action key -> the time it can next be used.
+      bot: i > 0 && bots,
+      rng,
+      seed: true,
     });
-  }
-
-  // Seed each conglomerate with two brands in different markets, so everyone
-  // opens with a choice about where to concentrate.
-  for (let round = 0; round < SEED_BRANDS; round++) {
-    for (const firm of game.firms) {
-      const owned = new Set(ownedBrands(game, firm.id).map((b) => b.marketId));
-      const free = game.brands.filter((b) => b.owner === null);
-      const fresh = free.filter((b) => !owned.has(b.marketId));
-      const pool = fresh.length ? fresh : free;
-      if (pool.length === 0) break;
-      pool[Math.floor(rng() * pool.length)].owner = firm.id;
-    }
   }
 
   computeShares(game);
   return game;
+}
+
+/** Put a brand into a market. Shared by world generation and launches. */
+export function addBrand(game, marketId, { name, owner = null, equity, price, rng = Math.random } = {}) {
+  const market = game.markets[marketId];
+  const brand = {
+    id: game.brands.length,
+    name: name ?? makeBrandName(game, market.key, rng),
+    marketId,
+    owner,
+    price: price ?? clamp(jitter(1, 0.12, rng), MIN_PRICE, MAX_PRICE),
+    equity: equity ?? jitter(38, 12, rng),
+    marketing: 2,
+    share: 0,
+    born: game.time,
+    promoUntil: 0,
+    lockedUntil: 0,
+    units: 0,
+    revenue: 0,
+    profit: 0,
+  };
+  game.brands.push(brand);
+  market.brandIds.push(brand.id);
+  return brand;
+}
+
+/**
+ * Seat a new conglomerate — at world generation, or when someone joins a game
+ * already in progress. Joiners are handed one brand in the least contested
+ * market going, so they always have somewhere to stand.
+ */
+export function addFirm(game, { name, human = false, bot = false, rng = Math.random, seed = true } = {}) {
+  const firm = {
+    id: game.firms.length,
+    name: name ?? makeFirmName(game, rng),
+    color: FIRM_COLORS[game.firms.length % FIRM_COLORS.length],
+    human,
+    bot,
+    cash: STARTING_CASH,
+    debt: 0,
+    boughtOut: false,
+    gone: false,
+    joinedAt: game.time,
+    cooldown: rng() * 6, // Stagger bot decisions from the first tick.
+    actionReady: {},
+  };
+  game.firms.push(firm);
+  if (seed) for (let i = 0; i < SEED_BRANDS; i++) seatFirm(game, firm, rng);
+  return firm;
+}
+
+/** Hand `firm` one brand: an unowned one in a quiet market, or a fresh launch. */
+function seatFirm(game, firm, rng = Math.random) {
+  const mine = new Set(game.brands.filter((b) => b.owner === firm.id).map((b) => b.marketId));
+  const contested = new Map();
+  for (const b of game.brands) {
+    if (b.owner === null) continue;
+    contested.set(b.marketId, (contested.get(b.marketId) ?? 0) + 1);
+  }
+  const free = game.brands
+    .filter((b) => b.owner === null && !mine.has(b.marketId))
+    .sort((a, b) => (contested.get(a.marketId) ?? 0) - (contested.get(b.marketId) ?? 0));
+  if (free.length) {
+    free[0].owner = firm.id;
+    free[0].born = game.time;
+    return free[0];
+  }
+  // Every brand is spoken for: found one in the emptiest market instead.
+  const market = [...game.markets]
+    .sort((a, b) => (contested.get(a.id) ?? 0) - (contested.get(b.id) ?? 0))[0];
+  return addBrand(game, market.id, { owner: firm.id, equity: LAUNCH_EQUITY * 2, rng });
+}
+
+/** A player quit or was disconnected: their brands go back on the market. */
+export function removeFirm(game, firmId) {
+  const firm = game.firms[firmId];
+  if (!firm || firm.gone) return false;
+  for (const brand of game.brands) {
+    if (brand.owner === firmId) {
+      brand.owner = null;
+      brand.marketing = 1.5;
+      brand.lockedUntil = game.time + INTEGRATION_LOCK;
+    }
+  }
+  firm.gone = true;
+  firm.boughtOut = true;
+  computeShares(game);
+  logEvent(game, `${firm.name} left the market.`, firm.color);
+  return true;
+}
+
+/** Firms still in the running. */
+export function activeFirms(game) {
+  return game.firms.filter((f) => !f.gone && !f.boughtOut);
+}
+
+/**
+ * The share of the whole economy that wins the game. Half of everything is a
+ * fair target in a four-firm game and an impossible one in a hundred-firm
+ * world, so the bar falls as the lobby grows — but never below a fifth, which
+ * is still a colossal position.
+ */
+export function winShare(game) {
+  const seats = Math.max(2, game.seats ?? game.firms.length);
+  return clamp(MONOPOLY_SHARE - 0.004 * (seats - 4), 0.2, MONOPOLY_SHARE);
 }
 
 // ---------------------------------------------------------------------------
@@ -821,6 +983,27 @@ function forceLiquidation(game, firmId, owed) {
 }
 
 /**
+ * The brands a bot will consider this cycle: everything in the markets it
+ * already trades in, plus a bounded random sample of everywhere else. In a
+ * hundred-firm world an exhaustive appraisal by every bot would dominate the
+ * server tick, and it buys nothing — nobody expands into a market they have
+ * never heard of on the strength of a spreadsheet.
+ */
+export function shoppingList(game, firm, mine, rng = Math.random, sample = AI_SCAN_SAMPLE) {
+  const home = new Set(mine.map((b) => b.marketId));
+  const near = [];
+  const far = [];
+  for (const brand of game.brands) {
+    if (brand.owner === firm.id) continue;
+    (home.has(brand.marketId) ? near : far).push(brand);
+  }
+  if (far.length <= sample) return near.concat(far);
+  const picked = [];
+  for (let i = 0; i < sample; i++) picked.push(far[Math.floor(rng() * far.length)]);
+  return near.concat(picked);
+}
+
+/**
  * Rival behaviour, in three moves: price toward the margin its market
  * rewards, fund marketing it can afford, and shop for brands when cash
  * allows. Rivals prefer cheap independents but will raid a distressed
@@ -919,10 +1102,12 @@ export function runAi(game, firm, dt, rng = Math.random) {
   }
 
   // Shop. Score candidates by value per dollar, with a nudge toward markets
-  // this firm already understands.
+  // this firm already understands. In a big world the candidate list is
+  // bounded — everything in markets this firm is already in, plus a sample of
+  // the rest — so a hundred bots shopping cannot stall a server tick.
   let best = null;
   let bestScore = 0;
-  for (const brand of game.brands) {
+  for (const brand of shoppingList(game, firm, mine, rng)) {
     const check = canAcquire(game, firm.id, brand.id);
     if (!check.ok) continue;
     // Skip the wreckage. A brand with no equity and no share costs overhead

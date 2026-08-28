@@ -26,60 +26,102 @@ file. Every roll happens locally in your browser.
 ## 🏙️ Also in this repo: Monopolis
 
 A second, unrelated toy that shares the same house rules (zero dependencies,
-pure tested engine, one HTML file for the UI): a **real-time strategy game
-about building a business empire** — no map, no armies, just markets. It plays
-on a phone.
+pure tested engine, plain ES modules): a **real-time strategy game about
+building a business empire** — no map, no armies, just markets. It plays on a
+phone, solo against bots or in a live room of **up to a hundred firms**.
 
-The economy is eight **markets** (Coffee, Streaming, Airlines, Solar, Fashion,
-Grocery, Semiconductors, Fitness). Each is contested by **brands** owned by
-you, by three AI conglomerates, or by nobody. Every brand sets a **price** and
-spends on **marketing**, and those two numbers decide its slice: customers are
-pulled toward brands they know and pushed away by expensive ones — hard in
-price-sensitive categories like Airlines, barely at all in Semiconductors.
+### The game
 
-**Build or buy.** You can *launch* your own brand into any market for a modest
-price. It arrives tiny and unknown, but a young brand converts advertising into
-recognition more than twice as fast for its first minute, so a funded launch can
-outrun an incumbent that stopped paying attention. Or you can *buy* a brand and
-take its whole slice today — independents at a small premium, a rival's at 55%
-over fair value, with the cash going straight into their war chest.
+The economy is a set of **markets** (Coffee, Streaming, Airlines, Solar,
+Fashion, Grocery, Semiconductors, Fitness — repeated across regions as the
+world grows). Each is contested by **brands** owned by you, by rivals, or by
+nobody. Every brand sets a **price** and spends on **marketing**, and those two
+numbers decide its slice: customers are pulled toward brands they know and
+pushed away by expensive ones — hard in price-sensitive categories like
+Airlines, barely at all in Semiconductors.
+
+**Build or buy.** Launch your own brand into any market for a modest price: it
+arrives tiny and unknown, but converts advertising into recognition more than
+twice as fast for its first minute, so a funded launch can outrun a sleepy
+incumbent. Or buy a brand and take its whole slice today — independents at a
+small premium, a rival's at 55% over fair value, the cash going straight into
+their war chest.
 
 **One-tap campaigns**, so a round is playable with a thumb:
 
 | Play | Cost | Effect |
 | --- | --- | --- |
 | Ad blitz | $55 | Buys customer reach outright, instantly |
-| Promotion | $30 | Discounts the brand for 18 seconds — a share spike, at a thinner margin |
+| Promotion | $30 | Discounts the brand for 18 seconds — a share spike at a thinner margin |
 | Category push | $65 | Lifts demand for *every* brand in the market, so it pays where you lead |
-
-Sliders for price and marketing budget are still there, tucked behind a
-disclosure for when you want them.
 
 **You can only raid the weak.** A rival's brand is takeable when it has been
 starved below 15% of its market, when its parent is deep in debt, or when you
 already out-hold that parent in that category. Firms with three brands or fewer
-are sheltered entirely, so a new player isn't dismantled before their first
-move. Win a category with price and advertising *first*, then buy the losers.
+are sheltered, so a new player isn't dismantled before their first move.
 
-**Scale pays.** Brands you run side by side in one market share their costs, and
-a large portfolio spreads overhead thinner than a small one — so consolidating
-compounds, which is what carries someone to a monopoly rather than a permanent
-four-way standoff.
+**Scale pays.** Brands run side by side in one market share their costs, and a
+large portfolio spreads overhead thinner — consolidating compounds, which is
+what carries someone to a monopoly rather than a permanent standoff.
 
-**Win** by taking 50% of all revenue. **Lose** by being stripped of every brand.
-A typical game runs eight to ten minutes; the speed control goes to 8×.
+**Win** by taking a share of all revenue: half of it in a four-firm game, down
+to a fifth in a hundred-firm world, since half of everything is not on the
+table when ninety-nine other people are trading.
 
-Open `monopolis.html` (engine: `src/monopolis.js`, tests:
-`test/monopolis.test.mjs`). It loads its engine as an ES module, so serve the
-folder rather than opening the file directly:
+### Playing solo
+
+`monopolis.html` runs the whole simulation in the tab — pick a world of 4 to
+100 firms in the lobby. It loads its engine as ES modules, so serve the folder
+rather than opening the file directly:
 
 ```sh
-python3 -m http.server 8000   # then visit localhost:8000/monopolis.html
+npm start                    # then visit localhost:8000/monopolis.html
+npm run build                # or: one self-contained file at dist/monopolis.html
 ```
 
-For a single self-contained file you can open straight from disk, run
-`node tools/build-standalone.mjs` — it inlines the engine into
-`dist/monopolis.html`.
+### Running a server
+
+```sh
+npm run serve                # http://localhost:8080, 100 seats
+node server/monopolis-server.mjs --port 8080 --seats 100
+```
+
+The server is the authority: it runs the world at 10 ticks a second and sends
+each player a snapshot four times a second. Clients submit *commands* and
+receive *snapshots* — they hold no simulation state, so a modified client can
+ask for whatever it likes and gets the same answer as everyone else. Every
+command is re-checked against the engine's rules, and each connection has a
+token-bucket rate limit.
+
+Seats are always full: bots hold every chair, a joining player takes one over,
+and a player who disconnects hands their firm back to a bot rather than
+evaporating mid-round. When someone wins, the result stands for fifteen seconds
+and a fresh world starts with everyone still connected reseated.
+
+Snapshots are **scoped** — the whole market list is sent once, and after that a
+client receives live figures only for the markets it is displaying, plus full
+brand detail for the one it has open. That is what keeps a hundred players
+inside a couple of megabytes a second; measured with a hundred concurrent
+clients, the server used about 2 MB/s and 13% of one core.
+
+WebSockets are implemented from scratch in `server/ws.mjs` (handshake, framing,
+ping/pong, fragmentation) because this repo has no dependencies and wasn't
+going to grow one for a hash and four bytes of framing.
+
+### Layout
+
+| File | What it is |
+| --- | --- |
+| `src/monopolis.js` | The simulation: markets, brands, pricing, campaigns, takeovers, bots |
+| `src/protocol.js` | Snapshots and commands — the only thing a client ever sees |
+| `server/ws.mjs` | A small RFC 6455 WebSocket implementation |
+| `server/room.mjs` | One authoritative world: seats, join/leave, rate limits, rounds |
+| `server/monopolis-server.mjs` | HTTP + WebSocket wiring and the tick loop |
+| `monopolis.html` | The interface — renders snapshots, whether local or remote |
+| `tools/build-standalone.mjs` | Inlines the module graph into one offline file |
+
+Tests: `npm test` (99 cases, covering the economy, the protocol, the WebSocket
+framing, room lifecycle, and a live server end to end).
 
 ## What it generates
 

@@ -115,7 +115,6 @@
     padding: 14px;
     align-items: start;
   }
-  #markets { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; }
 
   .card {
     background: linear-gradient(180deg, var(--surface-2), var(--surface));
@@ -259,6 +258,96 @@
     #desk, .sharebar > span { transition: none; }
   }
 
+  /* ---- lobby, tabs, connection state -------------------------------- */
+  .conn {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+  .conn.playing { color: var(--mint); border-color: var(--mint); }
+  .conn.dropped, .conn.full { color: var(--rose); border-color: var(--rose); }
+  #population { color: var(--ink-faint); font-size: 11.5px; padding-bottom: 8px; font-family: var(--mono); }
+  .browse { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .browse button { min-height: 38px; }
+  .browse button.on { border-color: var(--gold); color: var(--gold); background: rgba(217,164,65,0.12); }
+  #search {
+    flex: 1 1 160px;
+    min-width: 130px;
+    min-height: 38px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+  }
+  #markets { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; align-items: start; }
+  .card.open { grid-column: 1 / -1; border-color: var(--border-strong); }
+  .peek, .launch { margin-top: 9px; }
+  .brands { margin-top: 6px; }
+  td.rank { color: var(--ink-faint); width: 22px; }
+  tr.you td { color: var(--mint); }
+  #lobby, #toast { position: fixed; z-index: 50; }
+  #lobby {
+    inset: 0;
+    display: none;
+    place-items: center;
+    background: rgba(5, 8, 11, 0.92);
+    padding: 22px;
+  }
+  #lobby.show { display: grid; }
+  #lobby .box {
+    width: min(440px, 100%);
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  #lobby h2 {
+    margin: 0 0 6px;
+    font-family: var(--display);
+    font-size: 32px;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--ink);
+  }
+  .lobbyrow { margin: 14px 0; }
+  .lobbyrow input, .lobbyrow select {
+    width: 100%;
+    min-height: var(--tap);
+    margin-top: 5px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+  }
+  .serverline { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); margin: 4px 0 10px; }
+  #lobby button + .lobbyrow { margin-top: 18px; }
+  #toast {
+    left: 50%;
+    bottom: 22px;
+    transform: translate(-50%, 20px);
+    background: var(--raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--ink);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s, transform 0.18s;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
   #overlay {
     position: fixed;
     inset: 0;
@@ -286,35 +375,44 @@
 <div id="hud">
   <div id="hudTop">
     <h1>Mono<span>polis</span></h1>
+    <span class="conn solo" id="connection">solo</span>
     <div class="metrics">
       <div class="metric"><small>Cash</small><b id="mCash">—</b></div>
       <div class="metric"><small>Profit</small><b id="mProfit">—</b></div>
       <div class="metric"><small>Share</small><b id="mShare">—</b></div>
-      <div class="metric wide"><small>Debt</small><b id="mDebt">—</b></div>
+      <div class="metric"><small>Rank</small><b id="mRank">—</b></div>
       <div class="metric wide"><small>Net worth</small><b id="mWorth">—</b></div>
       <div class="metric wide"><small>Brands</small><b id="mBrands">—</b></div>
     </div>
     <button class="gold" id="playBtn">Pause</button>
     <button id="speedBtn">2×</button>
-    <button id="newBtn">New</button>
+    <button id="lobbyBtn">Rooms</button>
   </div>
   <div id="goalTrack"></div>
+  <div id="population" class="sub"></div>
 </div>
 
 <main>
-  <section id="markets"></section>
+  <section>
+    <div class="browse">
+      <button data-tab="mine" class="on">My markets</button>
+      <button data-tab="all">All markets</button>
+      <input id="search" type="search" placeholder="Search markets…" aria-label="Search markets" />
+    </div>
+    <div id="markets"></div>
+  </section>
 
   <aside>
     <div class="panel" id="desk">
       <div id="deskGrip"></div>
       <h2><span>Brand desk</span><button id="sheetClose">Close</button></h2>
-      <div id="deskBody"><p class="hint">Tap any brand to run it. Your own brands get one-tap campaigns; everyone else's show a takeover price.</p></div>
+      <div id="deskBody"><p class="hint">Open a market and tap a brand to run it.</p></div>
     </div>
 
     <div class="panel">
-      <h2>Standings</h2>
-      <table><thead><tr><th>Conglomerate</th><th>Share</th><th>Worth</th></tr></thead>
-      <tbody id="standings"></tbody></table>
+      <h2>Leaderboard</h2>
+      <table><thead><tr><th>#</th><th>Conglomerate</th><th>Share</th><th>Worth</th></tr></thead>
+      <tbody id="leaders"></tbody></table>
     </div>
 
     <div class="panel">
@@ -325,24 +423,47 @@
     <div class="panel">
       <h2>How to win</h2>
       <p class="hint">
-        <b>Build or buy.</b> Launch your own brand into a market for a low price and grow it —
-        new brands convert advertising into recognition far faster for their first minute —
-        or pay a premium to take someone else's, and get their whole slice today.<br><br>
-        <b>Price is a trade.</b> Charge more per unit and lose customers — badly in Airlines
-        and Grocery, hardly at all in Semiconductors.<br><br>
-        <b>Campaigns are one tap.</b> A blitz buys recognition outright, a promotion cuts your
-        price for a while, and a category push grows the whole market's demand.<br><br>
-        <b>You can only raid the weak.</b> Take a rival's brand when it's starved below 15% of
-        its market, when its parent is deep in debt, or when you already out-hold that parent
-        in that category. Firms with three brands or fewer are off-limits.<br><br>
-        <b>Scale pays.</b> Brands you run side by side in one market share their costs, so
-        winning a category makes the next one cheaper. Reach <b>50% of all revenue</b> to win.
+        <b>Build or buy.</b> Launch your own brand into a market and grow it — new brands turn
+        advertising into recognition far faster for their first minute — or pay a premium to take
+        someone else's and get their whole slice today.<br><br>
+        <b>Price is a trade.</b> Charge more per unit and lose customers — badly in Airlines and
+        Grocery, hardly at all in Semiconductors.<br><br>
+        <b>Campaigns are one tap.</b> A blitz buys recognition, a promotion discounts you for a
+        while, a push grows the whole market's demand.<br><br>
+        <b>You can only raid the weak.</b> Take a rival's brand when it's starved below 15% of its
+        market, when its parent is deep in debt, or when you out-hold that parent there. Firms with
+        three brands or fewer are off-limits.<br><br>
+        <b>Scale pays.</b> Brands you run side by side in one market share their costs.
       </p>
     </div>
   </aside>
 </main>
 
-<footer>Zero dependencies, no build step. Engine: <code>src/monopolis.js</code> · <code>npm test</code></footer>
+<footer>Zero dependencies, no build step. Engine: <code>src/monopolis.js</code> · server: <code>node server/monopolis-server.mjs</code></footer>
+
+<div id="toast"></div>
+
+<div id="lobby"><div class="box">
+  <h2>Monopolis</h2>
+  <p class="hint">A real-time economy where you win markets, not ground. Play alone against bots,
+    or join a live room of up to a hundred firms.</p>
+  <div class="lobbyrow">
+    <label class="lever">Your name<input id="playerName" type="text" maxlength="28" placeholder="Anonymous" /></label>
+  </div>
+  <div class="serverline" id="lobbyServer">Looking for a server…</div>
+  <button class="gold wide" id="joinBtn">Join</button>
+  <div class="lobbyrow">
+    <label class="lever">Solo world size <span class="val"></span>
+      <select id="botCount">
+        <option value="4">4 firms — quick</option>
+        <option value="12" selected>12 firms — busy</option>
+        <option value="40">40 firms — crowded</option>
+        <option value="100">100 firms — full house</option>
+      </select>
+    </label>
+  </div>
+  <button class="wide" id="soloBtn">Play solo</button>
+</div></div>
 
 <div id="overlay"><div class="box">
   <h2 id="ovTitle">—</h2>
@@ -351,394 +472,651 @@
 </div></div>
 
 <script type="module">
-import {
-  createGame, tick, standings, brandsIn, ownedBrands, computeShares,
-  setPrice, setMarketing, acquire, canAcquire, divest, launchBrand, canLaunch,
-  launchCost, runAction, canRunAction, brandValue, acquisitionPrice, netWorth,
-  firmProfit, economyShare, creditLimit, buyingPower, categoryGrip, effectivePrice,
-  launchMomentum, isNeglected, marketDemand,
-  ACTIONS, MONOPOLY_SHARE, MIN_PRICE, MAX_PRICE, MAX_EQUITY, OPENING_GRACE,
-} from './src/monopolis.js';
+import { createGame, tick, computeShares } from './src/monopolis.js';
+import { snapshot, worldInfo, applyCommand } from './src/protocol.js';
 
 const el = (id) => document.getElementById(id);
 const money = (n) => (n < 0 ? '-' : '') + '$' + (Math.abs(n) >= 1000
   ? (Math.abs(n) / 1000).toFixed(1) + 'k' : Math.abs(n).toFixed(0));
-const pct = (n) => (n * 100).toFixed(0) + '%';
+const pct = (n) => (n * 100).toFixed(n < 0.1 ? 1 : 0) + '%';
 const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
-
-const SPEEDS = [1, 2, 4, 8];
-let game, selected = null, playing = true, speedIndex = 1;
-let last = performance.now();
-let lastHud = 0;
-let deskSignature = ''; // Rebuild the desk when what it shows structurally changes.
-const refs = new Map();
-
-const brandColor = (b) => (b.owner === null ? '#4c5f70' : game.firms[b.owner].color);
+const escape = (s) => String(s).replace(/[&<>"]/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---------------------------------------------------------------------------
-// Market cards — built once per game, then only their numbers change.
+// Worlds
+//
+// Both kinds expose the same three things — info(), state() and send() — so
+// everything below this point is identical whether the simulation is running
+// in this tab or on a server with ninety-nine other people in it.
 // ---------------------------------------------------------------------------
-function buildBoard() {
-  refs.clear();
-  el('markets').innerHTML = '';
-  for (const market of game.markets) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    const sensitivity = market.elasticity > 1.9 ? 'price-sensitive'
-      : market.elasticity < 1.1 ? 'price-blind' : 'balanced';
-    card.innerHTML = `
-      <div class="cardhead"><h3>${market.name}</h3><span class="tag" data-role="buzz">—</span></div>
-      <div class="sub" data-role="sub"></div>
-      <div class="sharebar" data-role="bar"></div>
-      <div data-role="brands"></div>
-      <button class="launch wide" data-role="launch"></button>
-      <div class="sub" style="margin:7px 0 0">${sensitivity} · ad power ×${market.adPower.toFixed(2)} · unit cost $${market.unitCost.toFixed(2)}</div>`;
-    el('markets').appendChild(card);
 
-    const launch = card.querySelector('[data-role="launch"]');
-    launch.addEventListener('click', () => {
-      const result = launchBrand(game, 0, market.id);
-      if (result.ok) { buildBoard(); select(result.brand.id); }
-    });
+class LocalWorld {
+  constructor({ players = 12, speed = 2 } = {}) {
+    this.kind = 'local';
+    this.speed = speed;
+    this.players = players;
+    this.start();
+  }
 
-    refs.set(`m${market.id}`, {
-      card,
-      buzz: card.querySelector('[data-role="buzz"]'),
-      sub: card.querySelector('[data-role="sub"]'),
-      bar: card.querySelector('[data-role="bar"]'),
-      list: card.querySelector('[data-role="brands"]'),
-      launch,
-    });
-    for (const brand of brandsIn(game, market)) addBrandRow(market, brand);
+  start() {
+    this.game = createGame({ players: this.players });
+    computeShares(this.game);
+    this.you = 0;
+    this.view = { rows: null, detail: [] };
+    this.status = 'solo';
+  }
+
+  info() { return { ...worldInfo(this.game), you: this.you, round: 1 }; }
+  state() { return snapshot(this.game, this.you, this.view); }
+  setView(view) { this.view = { rows: null, detail: view.detail }; }
+  send(command) { return applyCommand(this.game, this.you, command); }
+  restart() { this.start(); }
+
+  advance(dt) {
+    if (!this.game.over) tick(this.game, dt * this.speed);
   }
 }
 
-function addBrandRow(market, brand) {
-  const m = refs.get(`m${market.id}`);
-  const seg = document.createElement('span');
-  seg.title = brand.name;
-  m.bar.appendChild(seg);
+class RemoteWorld {
+  constructor(url, name) {
+    this.kind = 'remote';
+    this.url = url;
+    this.name = name;
+    this.status = 'connecting';
+    this._info = null;
+    this._state = null;
+    this.onInfo = null;
+    this.connect();
+  }
 
-  const row = document.createElement('div');
-  row.className = 'brand';
-  row.innerHTML = `
-    <span class="dot"></span>
-    <span>
-      <span class="nm">${brand.name} <span class="flag"></span></span>
-      <span class="meta"></span>
-    </span>
-    <span class="right"></span>`;
-  row.addEventListener('click', () => select(brand.id));
-  m.list.appendChild(row);
+  connect() {
+    this.socket = new WebSocket(this.url);
+    this.socket.addEventListener('open', () => {
+      this.status = 'joining';
+      this.socket.send(JSON.stringify({ type: 'join', name: this.name }));
+    });
+    this.socket.addEventListener('message', (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === 'welcome') {
+        const first = !this._info;
+        this._info = message.info;
+        this.status = 'playing';
+        this.onInfo?.(first);
+      } else if (message.type === 'state') {
+        this._state = message.state;
+      } else if (message.type === 'full') {
+        this.status = 'full';
+      } else if (message.type === 'rejected') {
+        toast(message.reason);
+      }
+    });
+    this.socket.addEventListener('close', () => {
+      if (this.status !== 'full') this.status = 'dropped';
+    });
+    this.socket.addEventListener('error', () => { this.status = 'dropped'; });
+  }
 
-  refs.set(brand.id, {
-    seg, row,
-    dot: row.querySelector('.dot'),
-    flag: row.querySelector('.flag'),
-    meta: row.querySelector('.meta'),
-    right: row.querySelector('.right'),
-  });
-}
+  info() { return this._info; }
+  state() { return this._state; }
+  advance() {} // The server owns the clock.
 
-function paintBoard() {
-  for (const market of game.markets) {
-    const m = refs.get(`m${market.id}`);
-    const grip = categoryGrip(game, 0, market.id);
-    m.sub.textContent = `${money(marketDemand(game, market))}/s demand · you hold ${pct(grip)}`;
-    const hot = market.buzz > 0.12;
-    m.buzz.textContent = hot ? `demand +${pct(market.buzz * 0.55)}` : 'steady demand';
-    m.buzz.className = hot ? 'tag hot' : 'tag';
-
-    const check = canLaunch(game, 0, market.id);
-    m.launch.textContent = check.ok
-      ? `Launch a brand — ${money(check.cost)}`
-      : check.reason === 'not enough capital'
-        ? `Launch a brand — ${money(check.cost)} (need ${money(check.cost - buyingPower(game, 0))} more)`
-        : `Can't launch — ${check.reason}`;
-    m.launch.disabled = !check.ok;
-
-    for (const brand of brandsIn(game, market)) {
-      const r = refs.get(brand.id);
-      if (!r) continue;
-      const color = brandColor(brand);
-      r.seg.style.width = (brand.share * 100).toFixed(2) + '%';
-      r.seg.style.background = color;
-      r.seg.style.opacity = brand.owner === null ? 0.45 : 0.92;
-      r.dot.style.background = color;
-
-      const owner = brand.owner === null ? 'independent'
-        : brand.owner === 0 ? 'yours' : game.firms[brand.owner].name;
-      const promo = game.time < brand.promoUntil ? ' · on promo' : '';
-      r.meta.textContent = `${owner} · $${effectivePrice(game, brand).toFixed(2)} · reach ${brand.equity.toFixed(0)}${promo}`;
-      r.right.textContent = pct(brand.share);
-      r.right.style.color = brand.owner === 0 ? 'var(--mint)' : 'var(--ink-dim)';
-
-      const takeable = brand.owner !== 0 && canAcquire(game, 0, brand.id).ok;
-      const freshlyLaunched = brand.born > 0 && launchMomentum(game, brand) > 1.05;
-      r.flag.innerHTML = freshlyLaunched
-        ? `<span class="newtag">launching ${Math.ceil((brand.born + 75 - game.time))}s</span>`
-        : takeable ? '● in play'
-          : brand.owner !== null && isNeglected(game, brand.id) ? '○ weak' : '';
-      r.row.classList.toggle('selected', selected === brand.id);
-      r.row.classList.toggle('mine', brand.owner === 0);
+  setView(view) {
+    if (this.socket?.readyState === 1) {
+      this.socket.send(JSON.stringify({ type: 'view', view }));
     }
   }
+
+  send(command) {
+    if (this.socket?.readyState !== 1) return { ok: false, reason: 'offline' };
+    this.socket.send(JSON.stringify({ type: 'cmd', id: Date.now(), command }));
+    return { ok: true, pending: true };
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Brand desk — one-tap campaigns first, sliders tucked behind a disclosure.
+// State held by the interface itself
 // ---------------------------------------------------------------------------
-function select(brandId) {
-  selected = brandId;
-  deskSignature = '';
-  renderDesk();
-  if (isPhone()) el('desk').classList.add('open');
+
+const SPEEDS = [1, 2, 4, 8];
+let world = null;
+let info = null;
+let state = null;
+let selected = null;      // brand id open in the desk
+let openMarket = null;    // market whose brands are expanded
+let tab = 'mine';         // 'mine' | 'all'
+let search = '';
+let speedIndex = 1;
+let paused = false;
+let last = performance.now();
+let lastPaint = 0;
+let toastUntil = 0;
+
+const marketById = (id) => info?.markets?.find((m) => m.id === id);
+const detailFor = (id) => state?.detail?.find((b) => b.id === id) ?? null;
+const firmColor = (id) => info?.firms?.find((f) => f.id === id)?.color ?? '#4c5f70';
+const firmName = (id) => info?.firms?.find((f) => f.id === id)?.name ?? 'independent';
+
+function toast(text) {
+  el('toast').textContent = text;
+  el('toast').classList.add('show');
+  toastUntil = performance.now() + 2200;
 }
 
-function closeSheet() {
-  el('desk').classList.remove('open');
+// ---------------------------------------------------------------------------
+// Lobby
+// ---------------------------------------------------------------------------
+
+async function detectServer() {
+  if (!/^https?:/.test(location.protocol)) return null;
+  try {
+    const response = await fetch('/health', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const health = await response.json();
+    return health.ok ? health : null;
+  } catch { return null; }
 }
 
+async function showLobby() {
+  const server = await detectServer();
+  el('lobbyServer').innerHTML = server
+    ? `<b>${server.humans}</b> playing · ${server.active} firms · ${server.markets} markets · round ${server.round}`
+    : 'No server found at this address. Single player runs entirely in this tab.';
+  el('joinBtn').disabled = !server;
+  el('joinBtn').textContent = server ? `Join — ${server.seats} seats` : 'No server available';
+  el('lobby').classList.add('show');
+}
+
+function startLocal() {
+  const players = Number(el('botCount').value);
+  world = new LocalWorld({ players, speed: SPEEDS[speedIndex] });
+  info = world.info();
+  el('lobby').classList.remove('show');
+  resetView();
+}
+
+function startRemote() {
+  const name = el('playerName').value.trim().slice(0, 28) || 'Anonymous';
+  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/`;
+  world = new RemoteWorld(url, name);
+  world.onInfo = (first) => { info = world.info(); if (first) resetView(); else resetView(true); };
+  el('lobby').classList.remove('show');
+}
+
+function resetView(keepTab = false) {
+  selected = null;
+  openMarket = null;
+  if (!keepTab) tab = 'mine';
+  el('markets').innerHTML = '';
+  closeSheet();
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+/**
+ * Which markets to show, given the tab and the search box.
+ *
+ * The directory comes from `info` — every market in the world, sent once —
+ * while live figures come from `state`, which only carries the markets this
+ * client asked for. Browsing therefore works before the data arrives: a card
+ * appears immediately with placeholder figures, the next snapshot fills it in.
+ */
+const EMPTY_ROW = { d: 0, b: 0, g: 0, lc: 0, l: 0, lr: 'loading', s: [], pending: true };
+
+function visibleMarkets() {
+  if (!info?.markets) return [];
+  const live = new Map((state?.markets ?? []).map((row) => [row.id, row]));
+  const term = search.trim().toLowerCase();
+
+  let list = info.markets.map((meta) => ({ meta, row: live.get(meta.id) ?? { ...EMPTY_ROW, id: meta.id } }));
+  if (term) list = list.filter((entry) => entry.meta.name.toLowerCase().includes(term));
+  else if (tab === 'mine') list = list.filter((entry) => entry.row.g > 0);
+
+  list.sort((a, b) => (b.row.g - a.row.g) || (b.row.d - a.row.d) || (a.meta.id - b.meta.id));
+  return list.slice(0, MAX_CARDS);
+}
+
+/** How many market cards to keep on screen (and to ask the server for). */
+const MAX_CARDS = 24;
+
+let marketSignature = '';
+const marketNodes = new Map(); // market id -> its live DOM references
+
+/** Rebuild the market list only when *which* cards are shown changes. */
+function renderMarkets() {
+  const list = visibleMarkets();
+  const signature = `${tab}|${search}|${openMarket}|${list.map(({ meta }) => meta.id).join(',')}`;
+  if (signature === marketSignature) return paintMarkets(list);
+  marketSignature = signature;
+  marketNodes.clear();
+
+  const container = el('markets');
+  if (!list.length) {
+    container.innerHTML = `<p class="hint" style="padding:14px">${
+      tab === 'mine'
+        ? 'You hold nothing here yet — switch to <b>All markets</b> and launch a brand.'
+        : 'No market matches that search.'}</p>`;
+    return;
+  }
+
+  container.innerHTML = list.map(({ row, meta }) => {
+    const open = openMarket === row.id;
+    const sensitivity = meta.elasticity > 1.9 ? 'price-sensitive'
+      : meta.elasticity < 1.1 ? 'price-blind' : 'balanced';
+    return `<div class="card${open ? ' open' : ''}" data-market="${row.id}">
+      <div class="cardhead">
+        <h3>${escape(meta.name)}</h3>
+        <span class="tag" data-role="tag"></span>
+      </div>
+      <div class="sub" data-role="sub"><span data-role="grip"></span> · ${sensitivity}</div>
+      <div class="sharebar" data-role="bar"></div>
+      ${open
+        ? '<div class="brands" data-role="brands"></div><button class="launch wide" data-launch="' + row.id + '"></button>'
+        : '<button class="peek wide" data-open="' + row.id + '">Show brands</button>'}
+    </div>`;
+  }).join('');
+
+  for (const { row } of list) {
+    const card = container.querySelector(`[data-market="${row.id}"]`);
+    marketNodes.set(row.id, {
+      card,
+      tag: card.querySelector('[data-role="tag"]'),
+      grip: card.querySelector('[data-role="grip"]'),
+      bar: card.querySelector('[data-role="bar"]'),
+      brands: card.querySelector('[data-role="brands"]'),
+      launch: card.querySelector('[data-launch]'),
+      rows: new Map(),
+    });
+  }
+  paintMarkets(list);
+}
+
+/** Update the numbers on cards that are already on screen. */
+function paintMarkets(list = visibleMarkets()) {
+  for (const { row } of list) {
+    const node = marketNodes.get(row.id);
+    if (!node) continue;
+
+    node.tag.textContent = row.pending ? '—'
+      : row.b > 0.12 ? `demand +${pct(row.b * 0.55)}` : `${money(row.d)}/s`;
+    node.tag.className = row.b > 0.12 ? 'tag hot' : 'tag';
+    node.grip.textContent = row.pending ? 'loading…'
+      : row.g > 0 ? `you hold ${pct(row.g)}` : 'no position';
+
+    const slices = row.s.map(([owner, share]) =>
+      `<span style="width:${(share * 100).toFixed(2)}%;background:${owner === -1 ? '#39485a' : firmColor(owner)}
+        ;opacity:${owner === -1 ? 0.5 : 0.92}"></span>`).join('');
+    if (node.bar.dataset.slices !== slices) {
+      node.bar.dataset.slices = slices;
+      node.bar.innerHTML = slices;
+    }
+
+    if (node.launch) {
+      node.launch.textContent = row.l
+        ? `Launch a brand — ${money(row.lc)}`
+        : `Can't launch — ${row.lr ?? 'unavailable'}`;
+      node.launch.disabled = !row.l;
+    }
+    if (node.brands) paintBrandRows(node, row.id);
+  }
+}
+
+/** The expanded brand list of one open market, patched in place. */
+function paintBrandRows(node, marketId) {
+  const brands = state.detail.filter((b) => b.market === marketId)
+    .sort((a, b) => b.share - a.share);
+  if (!brands.length) {
+    if (!node.brands.dataset.empty) {
+      node.brands.innerHTML = '<p class="hint">Loading brands…</p>';
+      node.brands.dataset.empty = '1';
+    }
+    return;
+  }
+  const order = brands.map((b) => b.id).join(',');
+  if (node.brands.dataset.order !== order) {
+    node.brands.dataset.order = order;
+    delete node.brands.dataset.empty;
+    node.brands.innerHTML = brands.map(brandRowMarkup).join('');
+    node.rows.clear();
+    for (const brand of brands) {
+      const row = node.brands.querySelector(`[data-brand="${brand.id}"]`);
+      node.rows.set(brand.id, {
+        row,
+        dot: row.querySelector('.dot'),
+        nm: row.querySelector('.nm'),
+        meta: row.querySelector('.meta'),
+        right: row.querySelector('.right'),
+      });
+    }
+  }
+  for (const brand of brands) {
+    const parts = node.rows.get(brand.id);
+    if (!parts) continue;
+    parts.dot.style.background = brand.color ?? '#4c5f70';
+    parts.nm.innerHTML = `${escape(brand.name)} ${brand.launching ? '<span class="newtag">launching</span>'
+      : brand.canBuy ? '<span class="flag">● in play</span>'
+        : brand.weak ? '<span class="flag">○ weak</span>' : ''}`;
+    parts.meta.textContent = `${brand.mine ? 'yours' : brand.ownerName ?? 'independent'} · $${
+      brand.paid.toFixed(2)}${brand.promo ? ' (promo)' : ''} · reach ${brand.equity}`;
+    parts.right.textContent = pct(brand.share);
+    parts.right.style.color = brand.mine ? 'var(--mint)' : 'var(--ink-dim)';
+    parts.row.classList.toggle('mine', brand.mine);
+    parts.row.classList.toggle('selected', selected === brand.id);
+  }
+}
+
+function brandRowMarkup(brand) {
+  return `<div class="brand" data-brand="${brand.id}">
+    <span class="dot"></span>
+    <span><span class="nm"></span><span class="meta"></span></span>
+    <span class="right"></span>
+  </div>`;
+}
+
+let deskSignature = '';
+
+/** Rebuild the desk only when it is showing a different thing. */
 function renderDesk() {
-  if (selected === null) return;
-  const brand = game.brands[selected];
-  const market = game.markets[brand.marketId];
-  const mine = brand.owner === 0;
-  deskSignature = `${selected}:${brand.owner}`;
+  const brand = selected === null ? null : detailFor(selected);
+  const signature = brand ? `${brand.id}:${brand.owner}:${brand.mine}` : 'none';
+  if (signature === deskSignature) return paintDesk();
+  deskSignature = signature;
+
+  if (!brand) {
+    el('deskBody').innerHTML = '<p class="hint">Open a market and tap a brand to run it.</p>';
+    return;
+  }
+  const meta = marketById(brand.market);
+  const actions = info.actions;
 
   el('deskBody').innerHTML = `
-    <div class="row"><span><b style="color:${brandColor(brand)}">${brand.name}</b></span>
-      <span class="mono">${market.name}</span></div>
-    <div class="row"><span>Owner</span><b>${brand.owner === null ? 'Independent'
-      : mine ? 'You' : game.firms[brand.owner].name}</b></div>
-    <div class="row"><span>Share of ${market.name}</span><b id="dShare">—</b></div>
-    <div class="row"><span>Revenue</span><b id="dRev">—</b></div>
-    <div class="row"><span>Profit</span><b id="dProfit">—</b></div>
-    <div class="row"><span>Customer reach</span><b id="dEq">—</b></div>
-    <div id="deskControls"></div>`;
+    <div class="row"><span><b style="color:${brand.color ?? 'var(--ink-dim)'}">${escape(brand.name)}</b></span>
+      <span class="mono">${escape(meta?.name ?? '')}</span></div>
+    <div class="row"><span>Owner</span><b data-role="owner"></b></div>
+    <div class="row"><span>Share of market</span><b data-role="share"></b></div>
+    <div class="row"><span>Revenue</span><b data-role="revenue"></b></div>
+    <div class="row"><span>Profit</span><b data-role="profit"></b></div>
+    <div class="row"><span>Customer reach</span><b data-role="reach"></b></div>
+    ${brand.mine ? `
+      <div class="actions">
+        ${['blitz', 'promo', 'push'].map((key) => `
+          <button data-act="${key}" data-target="${key === 'push' ? brand.market : brand.id}">
+            <span>${key === 'push' ? 'Push market' : actions[key].label}</span>
+            <span class="cost"></span></button>`).join('')}
+      </div>
+      <p class="hint">A blitz buys reach instantly. A promotion discounts this brand for
+        ${actions.promo.duration}s. A push lifts demand for every brand in ${escape(meta?.name ?? 'this market')}.</p>
+      <details class="levers">
+        <summary>Fine control — price and marketing</summary>
+        <label class="lever">Price <span class="val" data-role="priceVal"></span>
+          <input type="range" id="pRange" min="${info.priceRange[0] * 100}" max="${info.priceRange[1] * 100}"
+                 value="${brand.price * 100}" /></label>
+        <label class="lever">Marketing <span class="val" data-role="adVal"></span>
+          <input type="range" id="aRange" min="0" max="40" step="0.5" value="${brand.marketing}" /></label>
+        <p class="hint">${escape(meta?.name ?? 'This market')} is ${
+          meta && meta.elasticity > 1.9 ? 'very' : meta && meta.elasticity < 1.1 ? 'barely' : 'moderately'
+        } price-sensitive. Marketing decays if you stop.</p>
+      </details>
+      <button class="wide" id="sellBtn" style="margin-top:10px"></button>`
+    : `
+      <div class="row"><span>Takeover price</span><b data-role="takeover"></b></div>
+      <button class="gold wide" id="buyBtn" style="margin-top:8px"></button>
+      <p class="hint" data-role="buyWhy"></p>`}`;
 
-  el('deskControls').innerHTML = mine ? ownedControls(brand, market) : rivalControls(brand);
-  wireControls(brand, market, mine);
+  wireDesk(brand);
   paintDesk();
 }
 
-function ownedControls(brand, market) {
-  return `
-    <div class="actions">
-      <button data-act="blitz" data-target="${brand.id}"><span>Ad blitz</span><span class="cost"></span></button>
-      <button data-act="promo" data-target="${brand.id}"><span>Promotion</span><span class="cost"></span></button>
-      <button data-act="push" data-target="${market.id}"><span>Push ${market.name}</span><span class="cost"></span></button>
-    </div>
-    <p class="hint" id="actHint">A blitz buys recognition instantly. A promotion discounts this brand for
-      ${ACTIONS.promo.duration}s. A push lifts demand for every brand in ${market.name} — worth it where
-      you hold the biggest slice.</p>
-    <details class="levers">
-      <summary>Fine control — price and marketing budget</summary>
-      <label class="lever">Price <span class="val" id="pVal"></span>
-        <input type="range" id="pRange" min="${MIN_PRICE * 100}" max="${MAX_PRICE * 100}" value="${brand.price * 100}" />
-      </label>
-      <label class="lever">Marketing <span class="val" id="aVal"></span>
-        <input type="range" id="aRange" min="0" max="40" step="0.5" value="${brand.marketing}" />
-      </label>
-      <p class="hint">${market.name} is
-        ${market.elasticity > 1.9 ? 'very' : market.elasticity < 1.1 ? 'barely' : 'moderately'}
-        price-sensitive (elasticity ${market.elasticity.toFixed(1)}). Marketing decays if you stop.</p>
-    </details>
-    <button class="wide" id="sellBtn" style="margin-top:10px"></button>`;
-}
-
-function rivalControls(brand) {
-  const owner = brand.owner === null ? null : game.firms[brand.owner];
-  return `
-    <div class="row"><span>Takeover price</span><b id="buyPrice">—</b></div>
-    <p class="hint">${owner === null
-      ? 'An independent — a clean buy at a small premium.'
-      : `A hostile bid carries a ${pct(0.55)} premium, and the cash goes straight to ${owner.name}.`}</p>
-    <button class="gold wide" id="buyBtn" style="margin-top:8px"></button>
-    <p class="hint" id="buyWhy"></p>`;
-}
-
-function wireControls(brand, market, mine) {
-  if (mine) {
-    for (const button of el('deskControls').querySelectorAll('[data-act]')) {
-      button.addEventListener('click', () => {
-        runAction(game, 0, button.dataset.act, Number(button.dataset.target));
-      });
-    }
-    const price = el('pRange');
-    price.addEventListener('input', () => setPrice(game, 0, selected, Number(price.value) / 100));
-    const ads = el('aRange');
-    ads.addEventListener('input', () => setMarketing(game, 0, selected, Number(ads.value)));
-    el('sellBtn').addEventListener('click', () => { divest(game, 0, selected); renderDesk(); });
-  } else {
-    el('buyBtn').addEventListener('click', () => { if (acquire(game, 0, selected).ok) renderDesk(); });
-  }
-}
-
-/** Live numbers and button states inside the desk. */
+/** Patch the desk's live numbers without touching its structure. */
 function paintDesk() {
-  if (selected === null || !el('dShare')) return;
-  const b = game.brands[selected];
-  if (deskSignature !== `${selected}:${b.owner}`) { renderDesk(); return; }
+  const brand = selected === null ? null : detailFor(selected);
+  if (!brand) return;
+  const body = el('deskBody');
+  const part = (role) => body.querySelector(`[data-role="${role}"]`);
+  if (!part('share')) return;
 
-  el('dShare').textContent = pct(b.share);
-  el('dRev').textContent = money(b.revenue) + '/s';
-  el('dProfit').textContent = (b.profit >= 0 ? '+' : '') + money(b.profit) + '/s';
-  el('dProfit').style.color = b.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
-  el('dEq').textContent = `${b.equity.toFixed(0)} / ${MAX_EQUITY}`;
+  part('owner').textContent = brand.mine ? 'You' : brand.ownerName ?? 'Independent';
+  part('share').textContent = pct(brand.share);
+  part('revenue').textContent = money(brand.revenue) + '/s';
+  const profit = part('profit');
+  profit.textContent = (brand.profit >= 0 ? '+' : '') + money(brand.profit) + '/s';
+  profit.style.color = brand.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
+  part('reach').textContent = `${brand.equity} / ${info.maxEquity}`;
 
-  for (const button of el('deskControls').querySelectorAll('[data-act]')) {
+  const cooldowns = state.you?.cooldowns ?? {};
+  for (const button of body.querySelectorAll('[data-act]')) {
     const key = button.dataset.act;
-    const check = canRunAction(game, 0, key, Number(button.dataset.target));
-    const cost = button.querySelector('.cost');
-    button.disabled = !check.ok;
-    if (check.reason === 'on cooldown') {
-      cost.textContent = `${Math.ceil(check.ready - game.time)}s`;
-    } else {
-      cost.textContent = money(ACTIONS[key].cost);
-    }
+    const cd = cooldowns[key] ?? 0;
+    const affordable = (state.you?.power ?? 0) >= info.actions[key].cost;
+    button.disabled = cd > 0 || !affordable;
+    button.querySelector('.cost').textContent = cd > 0
+      ? `${Math.ceil(cd)}s` : money(info.actions[key].cost);
   }
 
   const price = el('pRange');
-  if (price && document.activeElement !== price) {
-    price.value = b.price * 100;
-    el('pVal').textContent = '$' + b.price.toFixed(2);
-  } else if (price) {
-    el('pVal').textContent = '$' + (Number(price.value) / 100).toFixed(2);
+  if (price) {
+    if (document.activeElement !== price) price.value = brand.price * 100;
+    part('priceVal').textContent = '$' + (Number(price.value) / 100).toFixed(2);
   }
   const ads = el('aRange');
-  if (ads && document.activeElement !== ads) ads.value = b.marketing;
-  if (ads) el('aVal').textContent = money(b.marketing) + '/s';
-
+  if (ads) {
+    if (document.activeElement !== ads) ads.value = brand.marketing;
+    part('adVal').textContent = money(Number(ads.value)) + '/s';
+  }
   const sell = el('sellBtn');
-  if (sell) sell.textContent = `Divest for ${money(brandValue(game, selected) * 0.85)}`;
+  if (sell) sell.textContent = `Divest for ${money(brand.value * 0.85)}`;
 
   const buy = el('buyBtn');
   if (buy) {
-    const check = canAcquire(game, 0, selected);
-    const cost = acquisitionPrice(game, 0, selected);
-    el('buyPrice').textContent = money(cost);
-    buy.disabled = !check.ok;
-    buy.textContent = check.ok ? `Acquire for ${money(cost)}` : `Can't buy — ${check.reason}`;
-    const borrowed = cost - game.firms[0].cash;
-    el('buyWhy').textContent = check.ok && borrowed > 0
-      ? `This borrows ${money(borrowed)} against your portfolio — interest starts immediately.`
-      : whyBlocked(check.reason, b, cost);
+    part('takeover').textContent = money(brand.takeover);
+    buy.disabled = !brand.canBuy;
+    buy.textContent = brand.canBuy
+      ? `Acquire for ${money(brand.takeover)}`
+      : `Can't buy — ${brand.buyReason}`;
+    part('buyWhy').textContent = brand.canBuy && brand.takeover > (state.you?.cash ?? 0)
+      ? `This borrows ${money(brand.takeover - state.you.cash)} against your portfolio.`
+      : whyBlocked(brand);
   }
 }
 
-function whyBlocked(reason, brand, cost) {
-  if (reason === 'markets still opening') return `Markets open at ${OPENING_GRACE}s.`;
-  if (reason === 'still integrating') return 'It just changed hands — give it a moment.';
-  if (reason === 'not enough capital') {
-    return `You can raise ${money(buyingPower(game, 0))}: cash plus ${money(Math.max(0, creditLimit(game, 0) - game.firms[0].debt))} of credit.`;
+function whyBlocked(brand) {
+  switch (brand.buyReason) {
+    case 'markets still opening': return 'Trading opens shortly after the round starts.';
+    case 'still integrating': return 'It just changed hands — give it a moment.';
+    case 'not enough capital': return `You can raise ${money(state.you.power)}: cash plus ${money(state.you.credit)} of credit.`;
+    case 'owner is not vulnerable':
+      return `${escape(brand.ownerName)} is healthy. Starve this brand below 15% of its market, or out-hold them here, then come back.`;
+    default: return brand.ownerName === null
+      ? 'An independent — a clean buy at a small premium.'
+      : 'A hostile bid carries a 55% premium, paid straight to its owner.';
   }
-  if (reason === 'owner is not vulnerable') {
-    const owner = brand.owner === null ? null : game.firms[brand.owner];
-    return `${owner ? owner.name : 'The owner'} is healthy. Starve this brand below 15% of its market, or take the category yourself, then come back.`;
-  }
-  return '';
 }
 
-// ---------------------------------------------------------------------------
-// HUD, standings, ticker
-// ---------------------------------------------------------------------------
-function paintHud() {
-  const you = game.firms[0];
-  const profit = firmProfit(game, 0);
+function wireDesk(brand) {
+  for (const button of el('deskBody').querySelectorAll('[data-act]')) {
+    button.addEventListener('click', () => {
+      world.send({ type: 'action', key: button.dataset.act, target: Number(button.dataset.target) });
+    });
+  }
+  const price = el('pRange');
+  if (price) {
+    price.addEventListener('input', () => {
+      price.previousElementSibling?.remove?.();
+      world.send({ type: 'price', brand: brand.id, value: Number(price.value) / 100 });
+    });
+  }
+  const ads = el('aRange');
+  if (ads) ads.addEventListener('input', () => {
+    world.send({ type: 'marketing', brand: brand.id, value: Number(ads.value) });
+  });
+  el('sellBtn')?.addEventListener('click', () => {
+    world.send({ type: 'divest', brand: brand.id });
+    selected = null;
+    closeSheet();
+  });
+  el('buyBtn')?.addEventListener('click', () => world.send({ type: 'acquire', brand: brand.id }));
+}
+
+function renderHud() {
+  const you = state?.you;
+  if (!you) return;
   el('mCash').textContent = money(you.cash);
-  // Running on fumes is the thing players miss until they are being liquidated.
-  el('mCash').style.color = you.cash < 60 && profit < 0 ? 'var(--rose)' : '';
-  el('mProfit').textContent = (profit >= 0 ? '+' : '') + money(profit) + '/s';
-  el('mProfit').style.color = profit >= 0 ? 'var(--mint)' : 'var(--rose)';
-  el('mShare').textContent = pct(economyShare(game, 0));
-  el('mDebt').textContent = money(you.debt);
-  el('mWorth').textContent = money(netWorth(game, 0));
-  el('mBrands').textContent = ownedBrands(game, 0).length;
+  el('mCash').style.color = you.cash < 60 && you.profit < 0 ? 'var(--rose)' : '';
+  el('mProfit').textContent = (you.profit >= 0 ? '+' : '') + money(you.profit) + '/s';
+  el('mProfit').style.color = you.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
+  el('mShare').textContent = pct(you.share);
+  el('mRank').textContent = `#${you.rank}`;
+  el('mWorth').textContent = money(you.worth);
+  el('mBrands').textContent = you.brands;
 
-  const rows = standings(game);
-  let offset = 0;
-  el('goalTrack').innerHTML = rows.map((r) => {
-    const seg = `<i style="left:${(offset * 100).toFixed(2)}%;width:${(r.share * 100).toFixed(2)}%;background:${r.color}"></i>`;
-    offset += r.share;
-    return seg;
-  }).join('') + `<span class="mark" style="left:${MONOPOLY_SHARE * 100}%"></span>`;
+  const goal = state.goal;
+  el('goalTrack').innerHTML = state.leaders.map((leader, i) => {
+    const offset = state.leaders.slice(0, i).reduce((sum, l) => sum + l.share, 0);
+    return `<i style="left:${(offset * 100).toFixed(2)}%;width:${(leader.share * 100).toFixed(2)}%;background:${leader.color}"></i>`;
+  }).join('') + `<span class="mark" style="left:${(goal * 100).toFixed(1)}%"></span>`;
 
-  el('standings').innerHTML = rows.map((r) => `
-    <tr class="${r.boughtOut ? 'out' : ''}">
-      <td class="nm"><span class="dot" style="display:inline-block;background:${r.color};margin-right:6px"></span>${r.human ? 'You' : r.name}</td>
-      <td>${pct(r.share)}</td>
-      <td>${money(r.netWorth)}</td>
-    </tr>`).join('');
+  el('leaders').innerHTML = state.leaders.map((leader, i) => `
+    <tr class="${leader.out ? 'out' : ''}${leader.you ? ' you' : ''}">
+      <td class="rank">${i + 1}</td>
+      <td class="nm"><span class="dot" style="display:inline-block;background:${leader.color};margin-right:6px"></span>${
+        escape(leader.you ? 'You' : leader.name)}</td>
+      <td>${pct(leader.share)}</td>
+      <td>${money(leader.worth)}</td>
+    </tr>`).join('')
+    + (state.you.rank > 10 ? `<tr class="you"><td class="rank">${state.you.rank}</td>
+        <td class="nm"><span class="dot" style="display:inline-block;background:${state.you.color};margin-right:6px"></span>You</td>
+        <td>${pct(state.you.share)}</td><td>${money(state.you.worth)}</td></tr>` : '');
 
-  el('ticker').innerHTML = game.log.slice(0, 10)
-    .map((e) => `<div><span class="mono" style="color:${e.color}">${e.time.toFixed(0)}s</span> ${e.text}</div>`)
-    .join('') || '<div>Quiet so far.</div>';
+  el('ticker').innerHTML = state.log.map((e) =>
+    `<div><span class="mono" style="color:${e.color}">${e.t}s</span> ${escape(e.text)}</div>`).join('')
+    || '<div>Quiet so far.</div>';
+
+  const pop = state.population;
+  el('population').textContent = world.kind === 'remote'
+    ? `${pop.humans} playing · ${pop.active} firms · goal ${pct(goal)}`
+    : `${pop.active} firms · goal ${pct(goal)}`;
+  el('connection').textContent = world.kind === 'remote'
+    ? ({ connecting: 'connecting…', joining: 'joining…', playing: 'live', dropped: 'disconnected', full: 'room full' })[world.status]
+    : 'solo';
+  el('connection').className = 'conn ' + (world.kind === 'local' ? 'solo' : world.status);
 }
 
-function finish() {
-  playing = false;
-  el('playBtn').textContent = 'Play';
-  closeSheet();
-  const won = game.winner === 0;
-  el('ovTitle').textContent = won ? 'Monopoly.'
-    : game.outcome === 'bought-out' ? 'Bought out.' : 'Outmaneuvered.';
+function renderOverlay() {
+  const finished = state?.over;
+  el('overlay').classList.toggle('show', Boolean(finished));
+  if (!finished) return;
+  const won = state.you && state.winner === state.you.name;
+  el('ovTitle').textContent = won ? 'Monopoly.' : 'Round over.';
   el('ovTitle').style.color = won ? 'var(--mint)' : 'var(--gold)';
-  const winner = game.winner === null ? null : game.firms[game.winner];
   el('ovText').textContent = won
-    ? `You control ${pct(economyShare(game, 0))} of all revenue across ${game.markets.length} markets, worth ${money(netWorth(game, 0))}.`
-    : winner
-      ? `${winner.name} took ${pct(economyShare(game, winner.id))} of the economy. You finished on ${pct(economyShare(game, 0))}.`
-      : 'Every conglomerate collapsed. The independents inherit the economy.';
-  el('overlay').classList.add('show');
+    ? `You took ${pct(state.you.share)} of the entire economy — worth ${money(state.you.worth)}.`
+    : `${state.winner ?? 'Nobody'} took the round. You finished ${state.you ? `#${state.you.rank} on ${pct(state.you.share)}` : 'out'}.`;
+  el('ovBtn').textContent = world.kind === 'remote' ? 'Waiting for the next round…' : 'New economy';
+  el('ovBtn').disabled = world.kind === 'remote';
+}
+
+// ---------------------------------------------------------------------------
+// Loop
+// ---------------------------------------------------------------------------
+
+function reportView() {
+  const rows = visibleMarkets().map(({ row }) => row.id);
+  world.setView({ rows, detail: openMarket === null ? [] : [openMarket] });
 }
 
 function loop(now) {
-  const dt = Math.min((now - last) / 1000, 0.2);
+  const dt = Math.min((now - last) / 1000, 0.25);
   last = now;
-  if (playing && !game.over) {
-    const before = game.brands.length;
-    tick(game, dt * SPEEDS[speedIndex]);
-    if (game.brands.length !== before) buildBoard(); // A rival launched something.
-    if (game.over) finish();
+  if (world) {
+    if (!paused) world.advance(dt);
+    const next = world.state();
+    if (next) {
+      state = next;
+      info = info ?? world.info();
+      if (now - lastPaint > 180) {
+        lastPaint = now;
+        renderMarkets();
+        renderDesk();
+        renderHud();
+        renderOverlay();
+      }
+    }
   }
-  paintBoard();
-  paintDesk();
-  if (now - lastHud > 200) { paintHud(); lastHud = now; }
+  if (toastUntil && now > toastUntil) { el('toast').classList.remove('show'); toastUntil = 0; }
   requestAnimationFrame(loop);
 }
 
-function newGame() {
-  game = createGame({ rivals: 3, markets: 8 });
-  computeShares(game);
-  selected = ownedBrands(game, 0)[0]?.id ?? 0;
-  playing = true;
-  el('playBtn').textContent = 'Pause';
-  el('overlay').classList.remove('show');
-  buildBoard();
-  deskSignature = '';
-  renderDesk();
-  closeSheet();
-}
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
 
+el('markets').addEventListener('click', (event) => {
+  const openButton = event.target.closest('[data-open]');
+  if (openButton) {
+    openMarket = Number(openButton.dataset.open);
+    selected = null;
+    reportView();
+    renderMarkets();
+    return;
+  }
+  const launchButton = event.target.closest('[data-launch]');
+  if (launchButton) {
+    world.send({ type: 'launch', market: Number(launchButton.dataset.launch) });
+    return;
+  }
+  const brandRow = event.target.closest('[data-brand]');
+  if (brandRow) {
+    selected = Number(brandRow.dataset.brand);
+    renderDesk();
+    if (isPhone()) el('desk').classList.add('open');
+  }
+});
+
+function closeSheet() { el('desk').classList.remove('open'); }
+
+el('sheetClose').addEventListener('click', closeSheet);
 el('playBtn').addEventListener('click', () => {
-  if (game.over) return;
-  playing = !playing;
-  el('playBtn').textContent = playing ? 'Pause' : 'Play';
+  if (world.kind === 'remote') return toast('The server sets the pace in multiplayer.');
+  paused = !paused;
+  el('playBtn').textContent = paused ? 'Play' : 'Pause';
 });
 el('speedBtn').addEventListener('click', () => {
+  if (world.kind === 'remote') return toast('The server sets the pace in multiplayer.');
   speedIndex = (speedIndex + 1) % SPEEDS.length;
+  world.speed = SPEEDS[speedIndex];
   el('speedBtn').textContent = SPEEDS[speedIndex] + '×';
 });
-el('newBtn').addEventListener('click', newGame);
-el('ovBtn').addEventListener('click', newGame);
-el('sheetClose').addEventListener('click', closeSheet);
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') { e.preventDefault(); el('playBtn').click(); }
-  if (e.code === 'Escape') closeSheet();
+el('lobbyBtn').addEventListener('click', showLobby);
+el('soloBtn').addEventListener('click', startLocal);
+el('joinBtn').addEventListener('click', startRemote);
+el('ovBtn').addEventListener('click', () => {
+  if (world.kind === 'local') { world.restart(); info = world.info(); resetView(); }
 });
+for (const button of document.querySelectorAll('[data-tab]')) {
+  button.addEventListener('click', () => {
+    tab = button.dataset.tab;
+    for (const other of document.querySelectorAll('[data-tab]')) {
+      other.classList.toggle('on', other === button);
+    }
+    reportView();
+    renderMarkets();
+  });
+}
+el('search').addEventListener('input', (event) => {
+  search = event.target.value;
+  if (search) { tab = 'all'; for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === 'all'); }
+  reportView();
+  renderMarkets();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape') closeSheet();
+  if (event.code === 'Space' && event.target === document.body) { event.preventDefault(); el('playBtn').click(); }
+});
+setInterval(() => { if (world?.kind === 'remote') reportView(); }, 1000);
 
-newGame();
+showLobby();
 requestAnimationFrame(loop);
 </script>
 </body>
