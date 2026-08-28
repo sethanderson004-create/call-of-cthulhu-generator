@@ -1,0 +1,567 @@
+<title>The Dial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+<style>
+  :root {
+    --void: #05080d;
+    --panel: #0c131c;
+    --track: #121b26;
+    --ink: #e8eef5;
+    --ink-dim: #93a6b8;
+    --ink-faint: #5b7085;
+    --edge: rgba(120, 170, 210, 0.16);
+    --edge-strong: rgba(120, 170, 210, 0.4);
+    --you: #6fe3a8;
+    --display: "Bodoni Moda", Georgia, serif;
+    --sans: Archivo, system-ui, -apple-system, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(120% 90% at 50% 8%, #16222f 0%, var(--void) 62%);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+  header { width: min(560px, 100%); display: flex; align-items: baseline; gap: 10px; }
+  h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 21px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  header .sub { color: var(--ink-faint); font-size: 11.5px; font-family: var(--mono); margin-left: auto; }
+
+  .instrument { position: relative; width: min(560px, 100%); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; touch-action: manipulation; }
+
+  .readout {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    pointer-events: none;
+    gap: 2px;
+  }
+  .readout .share {
+    font-family: var(--mono);
+    font-size: 34px;
+    font-variant-numeric: tabular-nums;
+    color: var(--you);
+    line-height: 1;
+  }
+  .readout .label {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .readout .capital { font-family: var(--mono); font-size: 13px; color: var(--ink-dim); margin-top: 5px; }
+
+  .panel {
+    width: min(560px, 100%);
+    background: linear-gradient(180deg, var(--panel), #080d14);
+    border: 1px solid var(--edge);
+    border-radius: 13px;
+    padding: 12px 14px;
+  }
+  .target { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; min-height: 20px; }
+  .target b { color: var(--you); }
+  .target .hint { color: var(--ink-faint); font-size: 11.5px; margin-left: auto; font-family: var(--mono); }
+  label.commit { display: block; margin-top: 10px; font-size: 12px; color: var(--ink-dim); }
+  label.commit .val { float: right; font-family: var(--mono); color: var(--ink); }
+  input[type=range] { width: 100%; accent-color: var(--you); height: 32px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 4px; font-size: 11.5px; font-family: var(--mono); color: var(--ink-dim); }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+  .wire { width: min(560px, 100%); font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono); line-height: 1.6; min-height: 34px; }
+  .wire div { transition: opacity 0.3s; }
+  button {
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink);
+    background: #16222e;
+    border: 1px solid var(--edge-strong);
+    border-radius: 9px;
+    padding: 9px 14px;
+    cursor: pointer;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .note { width: min(560px, 100%); color: var(--ink-faint); font-size: 11.5px; line-height: 1.55; }
+</style>
+
+<header>
+  <h1>The Dial</h1>
+  <span class="sub" id="clock">0:00</span>
+</header>
+
+<div class="instrument">
+  <canvas id="dial" width="1120" height="1120"></canvas>
+  <div class="readout">
+    <div class="share" id="shareOut">0%</div>
+    <div class="label">of the economy</div>
+    <div class="capital" id="capitalOut">$0 · +$0/s</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="target" id="targetOut">Tap a segment on your border to push into it.</div>
+  <label class="commit">Commit to expansion <span class="val" id="commitVal">60%</span>
+    <input type="range" id="commit" min="0" max="100" value="60" />
+  </label>
+  <div class="legend" id="legend"></div>
+</div>
+
+<div class="wire" id="wire"></div>
+
+<div class="row">
+  <button id="restart">New economy</button>
+  <button id="watch">Watch only</button>
+</div>
+
+<p class="note">
+  Segments are markets, sized by how big they are. Colour fills outward from the hub as a firm takes
+  share; a full spoke is a cornered market. You can only push into a segment touching one you hold.
+  Brightness on a border is capital massing there — it shows a few seconds before share starts moving,
+  so a push is visible before it lands. A bright hub means someone has stopped spending and is banking.
+</p>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// A prototype of the shape, not the game. There is no pricing, no marketing,
+// no brands — just: capital accrues from what you hold, you commit it at one
+// segment, pressure builds visibly, and share transfers. The question this is
+// built to answer is whether watching it grow is worth doing.
+// ---------------------------------------------------------------------------
+
+const SEGMENTS = 22;
+const FIRMS = [
+  { name: 'You', color: '#6fe3a8', you: true },
+  { name: 'Halbrook', color: '#e0b357' },
+  { name: 'Vantor', color: '#5bb0e8' },
+  { name: 'Meridian', color: '#d4738f' },
+];
+const NEUTRAL = '#2b3a49';
+
+const INCOME = 0.42;       // capital per second per point of held weight
+const PUSH = 0.34;         // share taken per second per unit of pressure
+const PRESSURE_TAU = 2.8;  // seconds for massed capital to fade once you stop
+const RIVAL_COST = 3.4;    // taking held share costs this much more than open share
+const LOYALTY = 34;        // seconds for share to become fully entrenched
+const WIN = 0.5;
+
+const SECTORS = [
+  'Coffee', 'Grocery', 'Convenience', 'Snacks', 'Beverages', 'Restaurants',
+  'Apparel', 'Luxury', 'Sportswear', 'Fitness', 'Wellness', 'Pharma',
+  'Devices', 'Semiconductors', 'Telecom', 'Streaming', 'Music', 'Gaming',
+  'Logistics', 'Airlines', 'Energy', 'Solar',
+];
+
+let world, hoverSeg = null, watching = false, started = 0, lastFrame = 0;
+
+function makeWorld() {
+  const segments = SECTORS.slice(0, SEGMENTS).map((name, i) => ({
+    id: i,
+    name,
+    weight: 0.55 + Math.random() * 0.9,
+    shares: FIRMS.map(() => 0),
+    held: FIRMS.map(() => 0),      // seconds held, for entrenchment
+    pressure: FIRMS.map(() => 0),
+    flash: 0,
+  }));
+
+  const firms = FIRMS.map((firm, i) => ({
+    ...firm,
+    id: i,
+    capital: 40,
+    commit: firm.you ? 0.6 : 0.55 + Math.random() * 0.2,
+    target: null,
+    think: Math.random() * 2,
+    banked: 0,
+  }));
+
+  // Seat everyone evenly apart around the ring, with a small starting holding.
+  const spacing = Math.floor(SEGMENTS / firms.length);
+  for (const [i, firm] of firms.entries()) {
+    const seat = (i * spacing) % SEGMENTS;
+    segments[seat].shares[firm.id] = 0.55;
+    segments[seat].held[firm.id] = LOYALTY * 0.4;
+  }
+  return { segments, firms, time: 0, over: false, winner: null, events: [] };
+}
+
+const total = () => world.segments.reduce((sum, s) => sum + s.weight, 0);
+const heldWeight = (id) => world.segments.reduce((sum, s) => sum + s.weight * s.shares[id], 0);
+const shareOf = (id) => heldWeight(id) / total();
+const open = (segment) => Math.max(0, 1 - segment.shares.reduce((a, b) => a + b, 0));
+
+/** A firm may push into a segment it holds, or one touching a segment it holds. */
+function reachable(id) {
+  const out = new Set();
+  for (const segment of world.segments) {
+    if (segment.shares[id] <= 0.02) continue;
+    out.add(segment.id);
+    out.add((segment.id + 1) % SEGMENTS);
+    out.add((segment.id - 1 + SEGMENTS) % SEGMENTS);
+  }
+  return out;
+}
+
+function say(text, color) {
+  world.events.unshift({ text, color, at: world.time });
+  if (world.events.length > 3) world.events.pop();
+}
+
+// ---------------------------------------------------------------------------
+// Simulation
+// ---------------------------------------------------------------------------
+
+function step(dt) {
+  if (world.over) return;
+  world.time += dt;
+
+  for (const firm of world.firms) {
+    firm.capital += heldWeight(firm.id) * INCOME * dt;
+    if (!firm.you) thinkFor(firm, dt);
+
+    const reach = reachable(firm.id);
+    if (firm.target !== null && !reach.has(firm.target)) firm.target = null;
+
+    // Commit capital at the target. What is not committed is banked, and
+    // banking is visible to everyone as a bright hub.
+    if (firm.target !== null && firm.commit > 0) {
+      const spend = Math.min(firm.capital, firm.capital * firm.commit * dt * 1.6);
+      firm.capital -= spend;
+      world.segments[firm.target].pressure[firm.id] += spend;
+      firm.banked = Math.max(0, firm.banked - dt * 0.6);
+    } else {
+      firm.banked = Math.min(1, firm.banked + dt * 0.35);
+    }
+  }
+
+  for (const segment of world.segments) {
+    for (const firm of world.firms) {
+      const pressure = segment.pressure[firm.id];
+      if (pressure <= 0.001) { segment.pressure[firm.id] = 0; continue; }
+
+      // Pressure converts to share: open ground is cheap, a rival's entrenched
+      // position is not. Whatever is not converted this instant decays, so a
+      // push that stops fades rather than banking up forever.
+      let force = pressure * PUSH * dt * 0.04;
+      const free = open(segment);
+      const fromOpen = Math.min(free, force);
+      segment.shares[firm.id] += fromOpen;
+      force -= fromOpen;
+
+      if (force > 0) {
+        const victim = world.firms
+          .filter((other) => other.id !== firm.id && segment.shares[other.id] > 0.001)
+          .sort((a, b) => segment.shares[b.id] - segment.shares[a.id])[0];
+        if (victim) {
+          const entrenched = 1 + 4 * Math.min(1, segment.held[victim.id] / LOYALTY);
+          const taken = Math.min(segment.shares[victim.id], force / (RIVAL_COST * entrenched));
+          segment.shares[victim.id] -= taken;
+          segment.shares[firm.id] += taken;
+          segment.held[victim.id] *= 0.94;
+          if (taken > 0.0004) segment.flash = Math.min(1, segment.flash + taken * 2.5);
+          if (segment.shares[victim.id] < 0.004 && victim.you) {
+            say(`${firm.name} pushed you out of ${segment.name}`, firm.color);
+            segment.shares[victim.id] = 0;
+          }
+        }
+      }
+      segment.pressure[firm.id] = pressure * Math.exp(-dt / PRESSURE_TAU);
+    }
+
+    for (const firm of world.firms) {
+      segment.held[firm.id] = segment.shares[firm.id] > 0.02
+        ? Math.min(LOYALTY, segment.held[firm.id] + dt) : 0;
+    }
+    segment.flash = Math.max(0, segment.flash - dt * 1.4);
+  }
+
+  for (const firm of world.firms) {
+    if (shareOf(firm.id) >= WIN) { world.over = true; world.winner = firm; }
+  }
+}
+
+/** Rivals think on the same terms you do: reach, cost, and who is weak. */
+function thinkFor(firm, dt) {
+  firm.think -= dt;
+  if (firm.think > 0 && firm.target !== null) return;
+  firm.think = 2.5 + Math.random() * 3;
+
+  const reach = reachable(firm.id);
+  let best = null;
+  for (const id of reach) {
+    const segment = world.segments[id];
+    const free = open(segment);
+    const mine = segment.shares[firm.id];
+    // Open ground first, then a rival who is thin here, and a preference for
+    // finishing what it already holds.
+    const rival = world.firms
+      .filter((other) => other.id !== firm.id)
+      .reduce((sum, other) => sum + segment.shares[other.id], 0);
+    const value = segment.weight * (free * 1.6 + rival * 0.55 + (mine > 0.05 && mine < 0.9 ? 0.5 : 0));
+    const score = value * (0.8 + Math.random() * 0.4);
+    if (!best || score > best.score) best = { id, score };
+  }
+  firm.target = best ? best.id : null;
+}
+
+// ---------------------------------------------------------------------------
+// Drawing
+// ---------------------------------------------------------------------------
+
+const canvas = document.getElementById('dial');
+const ctx = canvas.getContext('2d');
+
+function layout() {
+  const size = canvas.clientWidth;
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(size * dpr)) {
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { size, cx: size / 2, cy: size / 2, r0: size * 0.175, r1: size * 0.365 };
+}
+
+function angles(index) {
+  const totalWeight = total();
+  let start = -Math.PI / 2;
+  for (let i = 0; i < index; i++) start += (world.segments[i].weight / totalWeight) * Math.PI * 2;
+  const sweep = (world.segments[index].weight / totalWeight) * Math.PI * 2;
+  return [start, start + sweep];
+}
+
+function band(cx, cy, from, to, a0, a1, fill, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(cx, cy, to, a0, a1);
+  ctx.arc(cx, cy, from, a1, a0, true);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  const { size, cx, cy, r0, r1 } = layout();
+  ctx.clearRect(0, 0, size, size);
+  const you = world.firms[0];
+  const reach = reachable(0);
+
+  // Quarter rings, so how deep a colour reaches is readable at a glance.
+  for (const fraction of [0.25, 0.5, 0.75]) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r0 + (r1 - r0) * fraction, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(120,170,210,0.07)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  for (const segment of world.segments) {
+    const [a0, a1] = angles(segment.id);
+    const gap = 0.004;
+    const from = a0 + gap;
+    const to = a1 - gap;
+
+    // The track a market's share fills along.
+    band(cx, cy, r0, r1, from, to, NEUTRAL, 0.5);
+
+    // Owners stack outward from the hub, so a cornered market is a full spoke.
+    let radius = r0;
+    for (const firm of world.firms) {
+      const share = segment.shares[firm.id];
+      if (share <= 0.001) continue;
+      const next = radius + (r1 - r0) * share;
+      band(cx, cy, radius, next, from, to, firm.color, firm.you ? 0.95 : 0.82);
+      radius = next;
+    }
+
+    if (segment.shares[0] > 0.02) {
+      const depth = r0 + (r1 - r0) * segment.shares[0];
+      ctx.beginPath();
+      ctx.arc(cx, cy, depth, from, to);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    // A segment you can reach is outlined; the one you are pushing is bright.
+    if (reach.has(segment.id) && !watching) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r1 + 5, from, to);
+      ctx.strokeStyle = segment.id === you.target ? you.color : 'rgba(111,227,168,0.32)';
+      ctx.lineWidth = segment.id === you.target ? 3 : 1.5;
+      ctx.stroke();
+    }
+
+    // Capital massing here, before any share has moved: the tell.
+    for (const firm of world.firms) {
+      const pressure = segment.pressure[firm.id];
+      if (pressure < 0.4) continue;
+      const strength = Math.min(1, pressure / 26);
+      ctx.save();
+      ctx.shadowColor = firm.color;
+      ctx.shadowBlur = 22 * strength;
+      band(cx, cy, r1 + 1, r1 + 4 + 7 * strength, from, to, firm.color, 0.35 + 0.55 * strength);
+      ctx.restore();
+    }
+
+    // A capture flashes, so something happening catches the eye.
+    if (segment.flash > 0.01) {
+      band(cx, cy, r0, r1, from, to, '#ffffff', segment.flash * 0.28);
+    }
+
+    // Labels stay outside the ring, upright, and only where there is room.
+    const mid = (a0 + a1) / 2;
+    if (a1 - a0 > 0.16) {
+      const lx = cx + Math.cos(mid) * (r1 + 20);
+      const ly = cy + Math.sin(mid) * (r1 + 20);
+      ctx.fillStyle = segment.shares[0] > 0.02 ? 'rgba(232,238,245,0.85)' : 'rgba(147,166,184,0.45)';
+      ctx.font = `${Math.max(9, size * 0.0175)}px Archivo, system-ui, sans-serif`;
+      const rightSide = Math.cos(mid) > 0;
+      ctx.textAlign = rightSide ? 'left' : 'right';
+      ctx.textBaseline = 'middle';
+      const width = ctx.measureText(segment.name).width;
+      const x = rightSide
+        ? Math.min(lx - 6, size - 4 - width)
+        : Math.max(lx + 6, 4 + width);
+      ctx.fillText(segment.name, x, ly);
+    }
+  }
+
+  // The hub: each firm's banked capital, so a burst being loaded is visible.
+  let hubAngle = -Math.PI / 2;
+  for (const firm of world.firms) {
+    const slice = Math.max(0.02, shareOf(firm.id)) * Math.PI * 2;
+    const glow = firm.banked;
+    ctx.save();
+    ctx.shadowColor = firm.color;
+    ctx.shadowBlur = 18 * glow;
+    band(cx, cy, r0 - 9, r0 - 3, hubAngle, hubAngle + slice, firm.color, 0.35 + 0.6 * glow);
+    ctx.restore();
+    hubAngle += slice;
+  }
+
+  // The win line, drawn on the rim: half the ring is the whole game.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r1 + 13, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * WIN);
+  ctx.strokeStyle = 'rgba(224,179,87,0.28)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+
+function segmentAt(x, y) {
+  const { size, cx, cy, r0, r1 } = layout();
+  const dx = x - cx;
+  const dy = y - cy;
+  const distance = Math.hypot(dx, dy);
+  if (distance < r0 * 0.7 || distance > r1 + 22) return null;
+  let angle = Math.atan2(dy, dx);
+  if (angle < -Math.PI / 2) angle += Math.PI * 2;
+  for (const segment of world.segments) {
+    const [a0, a1] = angles(segment.id);
+    if (angle >= a0 && angle <= a1) return segment.id;
+  }
+  return null;
+}
+
+canvas.addEventListener('click', (event) => {
+  if (watching || world.over) return;
+  const rect = canvas.getBoundingClientRect();
+  const id = segmentAt(event.clientX - rect.left, event.clientY - rect.top);
+  if (id === null) return;
+  if (!reachable(0).has(id)) {
+    flashTarget(`${world.segments[id].name} is out of reach — push from a market you hold.`);
+    return;
+  }
+  world.firms[0].target = world.firms[0].target === id ? null : id;
+});
+
+let targetMessage = '';
+let targetUntil = 0;
+function flashTarget(text) { targetMessage = text; targetUntil = performance.now() + 2200; }
+
+const el = (id) => document.getElementById(id);
+el('commit').addEventListener('input', (event) => {
+  world.firms[0].commit = Number(event.target.value) / 100;
+  el('commitVal').textContent = `${event.target.value}%`;
+});
+el('restart').addEventListener('click', () => { world = makeWorld(); started = performance.now(); });
+el('watch').addEventListener('click', () => {
+  watching = !watching;
+  el('watch').textContent = watching ? 'Take control' : 'Watch only';
+  world.firms[0].you = !watching;
+  if (watching) world.firms[0].target = null;
+});
+
+function paintPanel() {
+  const you = world.firms[0];
+  el('shareOut').textContent = `${(shareOf(0) * 100).toFixed(1)}%`;
+  el('capitalOut').textContent = `$${you.capital.toFixed(0)} · +$${(heldWeight(0) * INCOME).toFixed(1)}/s`;
+
+  const elapsed = (performance.now() - started) / 1000;
+  el('clock').textContent = `${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, '0')}`;
+
+  if (world.over) {
+    el('targetOut').innerHTML = world.winner.you
+      ? '<b>The market is yours.</b>'
+      : `<b style="color:${world.winner.color}">${world.winner.name}</b> cornered the economy.`;
+  } else if (performance.now() < targetUntil) {
+    el('targetOut').textContent = targetMessage;
+  } else if (watching) {
+    el('targetOut').textContent = 'Watching. Four firms, same rules, same speed.';
+  } else if (you.target === null) {
+    el('targetOut').textContent = 'Tap a segment on your border to push into it.';
+  } else {
+    const segment = world.segments[you.target];
+    const rivals = world.firms.filter((f) => !f.you && segment.shares[f.id] > 0.02);
+    el('targetOut').innerHTML = `Pushing into <b>${segment.name}</b>`
+      + `<span class="hint">${(segment.shares[0] * 100).toFixed(0)}% yours`
+      + `${rivals.length ? ` · ${rivals.map((r) => r.name).join(', ')} here` : ' · open ground'}</span>`;
+  }
+
+  el('legend').innerHTML = world.firms.map((firm) => `
+    <span><i style="background:${firm.color}"></i>${firm.you ? 'You' : firm.name} ${(shareOf(firm.id) * 100).toFixed(0)}%</span>`).join('')
+    + `<span><i style="background:${NEUTRAL}"></i>unclaimed ${(world.segments.reduce((sum, s) => sum + s.weight * open(s), 0) / total() * 100).toFixed(0)}%</span>`;
+
+  el('wire').innerHTML = world.events
+    .map((event) => `<div style="opacity:${Math.max(0.25, 1 - (world.time - event.at) / 12)}">${event.text}</div>`)
+    .join('');
+}
+
+function frame(now) {
+  const dt = Math.min((now - lastFrame) / 1000, 0.1);
+  lastFrame = now;
+  step(dt);
+  draw();
+  paintPanel();
+  requestAnimationFrame(frame);
+}
+
+world = makeWorld();
+started = performance.now();
+lastFrame = performance.now();
+requestAnimationFrame(frame);
+</script>
