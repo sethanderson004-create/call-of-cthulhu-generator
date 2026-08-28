@@ -59,7 +59,7 @@ export const EQUITY_DECAY = 0.015;
 
 /** Category buzz gained per $1/s of category marketing. */
 export const BUZZ_GAIN = 0.05;
-export const BUZZ_DECAY = 0.06;
+export const BUZZ_DECAY = 0.025;
 
 /** How much full buzz (1.0) inflates a market's unit demand. */
 export const BUZZ_EFFECT = 0.55;
@@ -174,10 +174,28 @@ export const MAX_BRANDS_PER_MARKET = 6;
  * category push spikes a whole market's demand.
  */
 export const ACTIONS = {
-  blitz: { label: 'Ad blitz', cost: 55, cooldown: 25, equity: 16, scope: 'brand' },
-  promo: { label: 'Promotion', cost: 30, cooldown: 20, discount: 0.78, duration: 18, scope: 'brand' },
-  push: { label: 'Category push', cost: 65, cooldown: 35, buzz: 0.55, scope: 'market' },
+  // Buys recognition outright. Strongest on a brand whose reach is low, and
+  // it lasts — equity decays slowly, so this is the play that compounds.
+  blitz: { label: 'Ad blitz', cost: 34, cooldown: 22, equity: 34, scope: 'brand' },
+  // Cheap volume now, and the volume itself converts: customers who try you
+  // during a promotion stick around, so a promotion in a big, price-sensitive
+  // market buys lasting reach a blitz would charge more for. A shallower cut
+  // than it used to be, because a deep one destroyed the margin it needed.
+  promo: { label: 'Promotion', cost: 28, cooldown: 20, discount: 0.85, duration: 22, scope: 'brand' },
+  // Grows the whole category. Only pays where you already hold the biggest
+  // slice — the rest of the lift goes to your rivals.
+  push: { label: 'Category push', cost: 60, cooldown: 30, buzz: 0.8, scope: 'market' },
 };
+
+/** Equity gained per unit sold while a promotion is running — trial to habit. */
+export const PROMO_LOYALTY = 0.3;
+
+/**
+ * After losing a brand, a firm cannot be raided again for this long. Losing
+ * one is a setback you can answer; losing three while you are still reading
+ * the first notification is just being farmed.
+ */
+export const RAID_RESPITE = 50;
 
 /**
  * Seconds a freshly acquired brand spends being integrated, during which
@@ -696,6 +714,10 @@ export function categoryGrip(game, firmId, marketId) {
 export function isVulnerable(game, brandId, buyerId = null) {
   const brand = game.brands[brandId];
   if (brand.owner === null) return true;
+  // Nobody is put out of business by a takeover: your last brand is yours.
+  if (ownedBrands(game, brand.owner).length <= 1) return false;
+  // A firm that just lost one gets a moment to respond before the next bid.
+  if (game.time < (game.firms[brand.owner].raidRespite ?? 0)) return false;
   if (inDistress(game, brand.owner) || isNeglected(game, brandId)) return true;
   if (buyerId === null) return false;
   if (ownedBrands(game, brand.owner).length <= SHELTERED_SIZE) return false;
@@ -741,6 +763,7 @@ export function acquire(game, buyerId, brandId) {
     seller.cash += price;
     repay(game, seller.id, seller.cash); // Sellers pay down debt first.
   }
+  if (seller) seller.raidRespite = game.time + RAID_RESPITE;
   brand.owner = buyerId;
   brand.lockedUntil = game.time + INTEGRATION_LOCK;
   if (brand.marketing < 1) brand.marketing = 1;
@@ -904,6 +927,105 @@ export function runAction(game, firmId, key, targetId) {
   return { ok: true, cost: spec.cost };
 }
 
+/** The window an estimate is averaged over — about a minute of play. */
+export const ESTIMATE_HORIZON = 60;
+
+/**
+ * How much of a play's instantaneous effect a firm actually banks, calibrated
+ * against simulated outcomes rather than assumed. Reach bought by a blitz
+ * decays and rivals answer it, so about a third of the first reading survives;
+ * category buzz fades on its own; a promotion's converted customers slightly
+ * beat the arithmetic, so it is left alone and rounded down. Showing the raw
+ * instantaneous figure would overstate every play by two or three times.
+ */
+export const REALIZATION = { blitz: 0.35, promo: 1, push: 0.5 };
+
+/** Re-solve the economy with one value changed, and read the profit delta. */
+function profitDelta(game, firmId, change) {
+  const before = firmProfit(game, firmId);
+  const undo = change();
+  computeShares(game);
+  const after = firmProfit(game, firmId);
+  undo();
+  computeShares(game);
+  return after - before;
+}
+
+/**
+ * What a one-tap play is worth, in money rather than vibes.
+ *
+ * Each play is applied to the live economy, the whole thing is re-solved, the
+ * change in the firm's profit is read off, and the value is then averaged over
+ * a minute — because the three plays pay out on completely different
+ * schedules, and comparing their instantaneous effects would be a lie:
+ *
+ *  - a blitz buys reach that decays slowly, so its effect is roughly flat;
+ *  - a promotion *loses* margin while it runs and pays afterwards, through the
+ *    customers it converts into lasting reach;
+ *  - a push fades with the category buzz it bought.
+ *
+ * It is an estimate, not a forecast — rivals answer, and the world moves — but
+ * it is honest about direction and rough size, which is what you need to
+ * choose between three buttons.
+ */
+export function estimateAction(game, firmId, key, targetId) {
+  const spec = ACTIONS[key];
+  const firm = game.firms[firmId];
+  if (!spec || !firm) return null;
+
+  let gain = null;
+
+  if (key === 'blitz') {
+    const brand = game.brands[targetId];
+    if (!brand || brand.owner !== firmId) return null;
+    gain = profitDelta(game, firmId, () => {
+      const equity = brand.equity;
+      brand.equity = clamp(brand.equity + spec.equity, 1, MAX_EQUITY);
+      return () => { brand.equity = equity; };
+    });
+  } else if (key === 'promo') {
+    const brand = game.brands[targetId];
+    if (!brand || brand.owner !== firmId) return null;
+    // While it runs: cheaper, so more units at a thinner margin.
+    const during = profitDelta(game, firmId, () => {
+      const until = brand.promoUntil;
+      brand.promoUntil = game.time + spec.duration;
+      return () => { brand.promoUntil = until; };
+    });
+    // Afterwards: the reach those extra customers left behind.
+    const converted = clamp(
+      PROMO_LOYALTY * brand.units * spec.duration * (1 - brand.equity / MAX_EQUITY),
+      0, MAX_EQUITY - brand.equity);
+    const after = profitDelta(game, firmId, () => {
+      const equity = brand.equity;
+      brand.equity = clamp(brand.equity + converted, 1, MAX_EQUITY);
+      return () => { brand.equity = equity; };
+    });
+    const tail = Math.max(0, ESTIMATE_HORIZON - spec.duration);
+    gain = (during * spec.duration + after * tail) / ESTIMATE_HORIZON;
+  } else if (key === 'push') {
+    const market = game.markets[targetId];
+    if (!market) return null;
+    const peak = profitDelta(game, firmId, () => {
+      const buzz = market.buzz;
+      market.buzz = clamp(market.buzz + spec.buzz, 0, 2);
+      return () => { market.buzz = buzz; };
+    });
+    // Buzz bleeds away at BUZZ_DECAY, so average the decaying tail.
+    const fade = (1 - Math.exp(-BUZZ_DECAY * ESTIMATE_HORIZON)) / (BUZZ_DECAY * ESTIMATE_HORIZON);
+    gain = peak * fade;
+  } else {
+    return null;
+  }
+
+  gain *= REALIZATION[key] ?? 1;
+  return {
+    gain,
+    payback: gain > 0 ? spec.cost / gain : null,
+    worthwhile: gain > 0 && spec.cost / gain <= ESTIMATE_HORIZON,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Player levers
 // ---------------------------------------------------------------------------
@@ -960,10 +1082,13 @@ export function tick(game, dt, rng = Math.random) {
   }
 
   // Equity: marketing buys awareness with diminishing returns, and neglect
-  // erodes what you already have.
+  // erodes what you already have. A running promotion also converts the
+  // customers it wins into reach, which is what makes it more than a
+  // temporary discount.
   for (const brand of game.brands) {
     const market = game.markets[brand.marketId];
-    const gain = EQUITY_GAIN * market.adPower * brand.marketing
+    const trial = game.time < (brand.promoUntil ?? 0) ? PROMO_LOYALTY * brand.units : 0;
+    const gain = (EQUITY_GAIN * market.adPower * brand.marketing + trial)
       * launchMomentum(game, brand) * (1 - brand.equity / MAX_EQUITY);
     brand.equity = clamp(brand.equity + (gain - EQUITY_DECAY * brand.equity) * dt, 1, MAX_EQUITY);
   }

@@ -20,7 +20,8 @@ import {
   brandValue, acquisitionPrice, canAcquire, canLaunch, canRunAction, isNeglected,
   launchCost, standings, activeFirms, winShare, timeLeft,
   setPrice, setMarketing, runAction, launchBrand, acquire, divest,
-  ACTIONS, MAX_EQUITY, MIN_PRICE, MAX_PRICE,
+  estimateAction, isVulnerable,
+  ACTIONS, MAX_EQUITY, MIN_PRICE, MAX_PRICE, ESTIMATE_HORIZON,
 } from './monopolis.js';
 
 /** Numbers on the wire are rounded — nobody can see the fourth decimal. */
@@ -103,7 +104,54 @@ function brandDetail(game, brand, firmId) {
     takeover: mine ? null : Math.round(acquisitionPrice(game, firmId, brand.id)),
     canBuy: mine ? false : check.ok,
     buyReason: mine || check.ok ? null : check.reason,
+    // What each play is worth on this brand, so the interface can say so
+    // instead of leaving the player to guess.
+    plays: mine ? playValues(game, firmId, brand) : null,
+    // Whether a rival could take this brand from you right now.
+    exposed: mine ? isVulnerable(game, brand.id, null) : false,
   };
+}
+
+/** Estimated value of each one-tap play on a brand, keyed by action. */
+function playValues(game, firmId, brand) {
+  const out = {};
+  for (const key of Object.keys(ACTIONS)) {
+    const target = ACTIONS[key].scope === 'market' ? brand.marketId : brand.id;
+    const estimate = estimateAction(game, firmId, key, target);
+    if (!estimate) continue;
+    out[key] = {
+      gain: r2(estimate.gain),
+      payback: estimate.payback === null ? null : Math.round(estimate.payback),
+      worth: estimate.worthwhile,
+    };
+  }
+  return out;
+}
+
+/**
+ * Every brand you own, in one list, so a player on a phone can see their whole
+ * business without opening markets one at a time. Sorted by what needs
+ * attention: losing money first, then exposed to a takeover, then the rest.
+ */
+function portfolio(game, firmId) {
+  return ownedBrands(game, firmId)
+    .map((brand) => ({
+      id: brand.id,
+      name: brand.name,
+      market: brand.marketId,
+      marketName: game.markets[brand.marketId].name,
+      share: r3(brand.share),
+      revenue: r2(brand.revenue),
+      profit: r2(brand.profit),
+      equity: Math.round(brand.equity),
+      price: r2(brand.price),
+      promo: game.time < brand.promoUntil,
+      exposed: isVulnerable(game, brand.id, null),
+      launching: brand.born > 0 && launchMomentum(game, brand) > 1.05,
+    }))
+    .sort((a, b) => (a.profit >= 0) - (b.profit >= 0)
+      || (b.exposed ? 1 : 0) - (a.exposed ? 1 : 0)
+      || b.revenue - a.revenue);
 }
 
 /**
@@ -181,6 +229,7 @@ export function snapshot(game, firmId, view = {}) {
     markets: game.markets
       .filter((m) => shown === null || shown.has(m.id))
       .map((m) => marketRow(game, m, firmId)),
+    portfolio: portfolio(game, firmId),
     detail,
     log: game.log.slice(0, 10).map((e) => ({ t: Math.round(e.time), text: e.text, color: e.color })),
   };

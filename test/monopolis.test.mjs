@@ -14,6 +14,7 @@ import {
   INFLATION_PERIOD, MAX_INFLATION,
   OPENING_GRACE, NEGLECT_RATIO, CATEGORY_EDGE, INTEGRATION_LOCK, SHELTERED_SIZE,
   ROUND_SECONDS, timeLeft, activeFirms, addFirm, removeFirm, worldSize, winShare,
+  RAID_RESPITE, estimateAction, ESTIMATE_HORIZON, PROMO_LOYALTY,
   scaleFactor, OVERHEAD_REFERENCE_DEMAND, launchBrand, canLaunch, launchCost,
   runAction, canRunAction, effectivePrice, launchMomentum, ACTIONS, stableSize,
   CATEGORY_SYNERGY,
@@ -194,6 +195,100 @@ test('the world and the win bar scale with the lobby', () => {
   assert.ok(winShare(big) < winShare(small));
   assert.ok(winShare(big) >= 0.2);
   for (const firm of big.firms) assert.ok(ownedBrands(big, firm.id).length > 0, 'everyone is seated');
+});
+
+test('nobody is taken out by a takeover: your last brand is yours', () => {
+  const game = openMarkets(createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) }));
+  const victim = game.firms[1];
+  const kept = ownedBrands(game, victim.id);
+  for (const brand of kept.slice(1)) brand.owner = null; // down to one
+  victim.cash = 0;
+  victim.debt = portfolioValue(game, victim.id) * 3; // deeply distressed
+  computeShares(game);
+  game.firms[0].cash = 100_000;
+
+  const last = ownedBrands(game, victim.id)[0];
+  assert.equal(ownedBrands(game, victim.id).length, 1);
+  assert.equal(isVulnerable(game, last.id, 0), false, 'the last brand cannot be taken');
+  assert.equal(canAcquire(game, 0, last.id).ok, false);
+});
+
+test('losing a brand buys a respite before the next raid', () => {
+  const game = openMarkets(createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) }));
+  const victim = game.firms[1];
+  victim.cash = 0;
+  victim.debt = portfolioValue(game, victim.id) * 3;
+  computeShares(game);
+  game.firms[0].cash = 100_000;
+
+  const [first] = ownedBrands(game, victim.id);
+  assert.equal(acquire(game, 0, first.id).ok, true);
+  assert.equal(victim.raidRespite, game.time + RAID_RESPITE);
+
+  // Everything else of theirs is off the table until the respite expires.
+  for (const brand of ownedBrands(game, victim.id)) {
+    assert.equal(isVulnerable(game, brand.id, 0), false, 'not while they are catching their breath');
+  }
+  game.time += RAID_RESPITE + 1;
+  computeShares(game);
+  assert.ok(ownedBrands(game, victim.id).length >= 1);
+});
+
+test('a promotion converts the customers it wins into lasting reach', () => {
+  const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const brand = ownedBrands(game, 0)[0];
+  brand.marketing = 0; // isolate the promotion from ordinary advertising
+  brand.equity = 40;
+  computeShares(game);
+
+  const startingEquity = brand.equity;
+  const startingTime = game.time;
+  const run = () => { for (let i = 0; i < ACTIONS.promo.duration * 2; i++) tick(game, 0.5, half); };
+
+  run();
+  const withoutPromo = brand.equity;
+
+  brand.equity = startingEquity;
+  game.time = startingTime;
+  brand.promoUntil = game.time + ACTIONS.promo.duration;
+  computeShares(game);
+  run();
+  assert.ok(brand.equity > withoutPromo,
+    `a promotion should leave reach behind (${brand.equity} vs ${withoutPromo})`);
+  assert.ok(PROMO_LOYALTY > 0);
+});
+
+test('an action estimate names its value and its payback', () => {
+  const game = createGame({ players: 8, rng: seq([0.3, 0.8, 0.15, 0.6, 0.45]) });
+  computeShares(game);
+  const brand = ownedBrands(game, 0)[0];
+
+  const blitz = estimateAction(game, 0, 'blitz', brand.id);
+  assert.ok(blitz.gain > 0, 'reach is worth something on a brand you own');
+  assert.ok(Math.abs(blitz.payback - ACTIONS.blitz.cost / blitz.gain) < 1e-6);
+  assert.equal(blitz.worthwhile, blitz.payback <= ESTIMATE_HORIZON);
+
+  // Estimating must not disturb the world it is estimating.
+  const before = JSON.stringify(game.brands.map((b) => [b.equity, b.share, b.promoUntil]));
+  estimateAction(game, 0, 'promo', brand.id);
+  estimateAction(game, 0, 'push', brand.marketId);
+  assert.equal(JSON.stringify(game.brands.map((b) => [b.equity, b.share, b.promoUntil])), before);
+
+  assert.equal(estimateAction(game, 0, 'blitz', game.brands.find((b) => b.owner !== 0).id), null);
+  assert.equal(estimateAction(game, 0, 'nonsense', brand.id), null);
+});
+
+test('a category push is worth more where you already lead', () => {
+  const game = createGame({ players: 8, rng: seq([0.3, 0.8, 0.15, 0.6, 0.45]) });
+  const brand = ownedBrands(game, 0)[0];
+  const market = game.markets[brand.marketId];
+  computeShares(game);
+  const small = estimateAction(game, 0, 'push', market.id).gain;
+
+  for (const other of brandsIn(game, market)) other.owner = 0;
+  computeShares(game);
+  const dominant = estimateAction(game, 0, 'push', market.id).gain;
+  assert.ok(dominant > small * 2, 'growing a category you own beats growing one you don\'t');
 });
 
 test('a startup is sheltered from category-edge raids', () => {

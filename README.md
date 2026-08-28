@@ -47,18 +47,25 @@ incumbent. Or buy a brand and take its whole slice today — independents at a
 small premium, a rival's at 55% over fair value, the cash going straight into
 their war chest.
 
-**One-tap campaigns**, so a round is playable with a thumb:
+**One-tap campaigns**, so a round is playable with a thumb. Each shows what it
+is worth on that brand *right now* — an estimate in dollars per second, with a
+payback time — because three buttons with invisible returns is not a decision:
 
-| Play | Cost | Effect |
-| --- | --- | --- |
-| Ad blitz | $55 | Buys customer reach outright, instantly |
-| Promotion | $30 | Discounts the brand for 18 seconds — a share spike at a thinner margin |
-| Category push | $65 | Lifts demand for *every* brand in the market, so it pays where you lead |
+| Play | Cost | Effect | Pays when |
+| --- | --- | --- | --- |
+| Ad blitz | $34 | Buys customer reach outright, and reach decays slowly | Your brand's reach is behind its rivals' |
+| Promotion | $28 | Discounts the brand for 22s — and the customers it wins convert into lasting reach | The market is big and price-sensitive |
+| Category push | $60 | Lifts demand for *every* brand in the market | You already hold the biggest slice |
+
+The estimates are calibrated against simulated outcomes rather than assumed, so
+a play that says it pays back in forty seconds roughly does.
 
 **You can only raid the weak.** A rival's brand is takeable when it has been
-starved below 15% of its market, when its parent is deep in debt, or when you
-already out-hold that parent in that category. Firms with three brands or fewer
-are sheltered, so a new player isn't dismantled before their first move.
+starved well below its market's even split, when its parent is deep in debt, or
+when you already out-hold that parent in that category. Firms with three brands
+or fewer are sheltered, **your last brand can never be taken**, and losing one
+buys you a fifty-second respite before the next bid — you can be cut down, but
+not farmed while you are reading the notification.
 
 **Scale pays.** Brands run side by side in one market share their costs, and a
 large portfolio spreads overhead thinner — consolidating compounds, which is
@@ -74,6 +81,16 @@ and every brand's full profit and loss — revenue, cost of goods, marketing,
 overhead — is shown in the brand desk, so when a brand does lose money you can
 see which line is doing it. Campaigns and takeovers are meant to be a real
 sacrifice of that income, not a slide into permanent losses.
+
+### Managing a business on a phone
+
+**My brands** is the default view: every brand you own on one screen, sorted by
+what needs attention — losing money first, then exposed to a takeover — each
+with its share, revenue, profit, reach, and the three campaign buttons attached
+directly, so running your business never requires opening markets one at a
+time. **Your round** draws your share of the economy against the win line as
+the round unfolds. The brand desk breaks out a full profit and loss, so a brand
+that is losing money says which line is doing it.
 
 ### Playing solo
 

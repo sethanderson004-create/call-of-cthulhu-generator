@@ -189,6 +189,45 @@
     align-items: center;
   }
   .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 3px 0; }
+  #portfolio { display: grid; gap: 10px; margin-bottom: 14px; }
+  .holding {
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 12px;
+  }
+  .holding.warn { border-color: rgba(194, 96, 127, 0.5); }
+  .holding .top { display: flex; align-items: baseline; gap: 8px; }
+  .holding .top b { font-size: 14.5px; flex: 1 1 auto; }
+  .holding .where { color: var(--ink-faint); font-size: 11.5px; font-family: var(--mono); }
+  .holding .figures {
+    display: flex;
+    gap: 14px;
+    margin: 7px 0 9px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+    flex-wrap: wrap;
+  }
+  .holding .figures b { color: var(--ink); font-weight: 600; }
+  .holding .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .holding .quick button { min-height: 46px; padding: 5px 4px; display: flex; flex-direction: column; gap: 1px; align-items: center; justify-content: center; }
+  .holding .quick .roi { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
+  .holding .quick button.good { border-color: var(--mint); }
+  .holding .quick button.good .roi { color: var(--mint); }
+  .chip {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+  .chip.bad { color: var(--rose); border-color: var(--rose); }
+  .chip.good { color: var(--mint); border-color: var(--mint); }
+  #trend { width: 100%; height: 110px; display: block; margin-bottom: 8px; }
   .pnl { margin: 8px 0; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 9px; }
   .pnl .row { padding: 2px 0; }
   .pnl .row.sub { color: var(--ink-faint); font-size: 12px; padding-left: 10px; }
@@ -400,10 +439,12 @@
 <main>
   <section>
     <div class="browse">
-      <button data-tab="mine" class="on">My markets</button>
+      <button data-tab="portfolio" class="on">My brands</button>
+      <button data-tab="mine">My markets</button>
       <button data-tab="all">All markets</button>
       <input id="search" type="search" placeholder="Search markets…" aria-label="Search markets" />
     </div>
+    <div id="portfolio"></div>
     <div id="markets"></div>
   </section>
 
@@ -412,6 +453,13 @@
       <div id="deskGrip"></div>
       <h2><span>Brand desk</span><button id="sheetClose">Close</button></h2>
       <div id="deskBody"><p class="hint">Open a market and tap a brand to run it.</p></div>
+    </div>
+
+    <div class="panel">
+      <h2>Your round</h2>
+      <canvas id="trend" width="600" height="140" aria-label="Your share of the economy over the round"></canvas>
+      <div class="row"><span>Share now</span><b id="trendNow">—</b></div>
+      <div class="row"><span>Best this round</span><b id="trendPeak">—</b></div>
     </div>
 
     <div class="panel">
@@ -597,7 +645,7 @@ let info = null;
 let state = null;
 let selected = null;      // brand id open in the desk
 let openMarket = null;    // market whose brands are expanded
-let tab = 'mine';         // 'mine' | 'all'
+let tab = 'portfolio';    // 'portfolio' | 'mine' | 'all'
 let search = '';
 let speedIndex = 1;
 let paused = false;
@@ -664,11 +712,16 @@ function startRemote() {
 }
 
 function resetView(keepTab = false) {
+  history.length = 0;
   selected = null;
   openMarket = null;
-  if (!keepTab) tab = 'mine';
+  if (!keepTab) tab = 'portfolio';
   el('markets').innerHTML = '';
+  el('portfolio').innerHTML = '';
+  portfolioSignature = '';
+  marketSignature = '';
   closeSheet();
+  if (world) reportView();
 }
 
 // ---------------------------------------------------------------------------
@@ -686,7 +739,7 @@ function resetView(keepTab = false) {
 const EMPTY_ROW = { d: 0, b: 0, g: 0, lc: 0, l: 0, lr: 'loading', s: [], pending: true };
 
 function visibleMarkets() {
-  if (!info?.markets) return [];
+  if (!info?.markets || tab === 'portfolio') return [];
   const live = new Map((state?.markets ?? []).map((row) => [row.id, row]));
   const term = search.trim().toLowerCase();
 
@@ -701,11 +754,122 @@ function visibleMarkets() {
 /** How many market cards to keep on screen (and to ask the server for). */
 const MAX_CARDS = 24;
 
+// ---------------------------------------------------------------------------
+// My brands — the whole business on one screen, with the plays attached
+// ---------------------------------------------------------------------------
+
+let portfolioSignature = '';
+const holdingNodes = new Map();
+
+function renderPortfolio() {
+  const container = el('portfolio');
+  if (tab !== 'portfolio') {
+    if (container.dataset.on === '1') { container.innerHTML = ''; container.dataset.on = '0'; portfolioSignature = ''; }
+    return;
+  }
+  container.dataset.on = '1';
+  const rows = state?.portfolio ?? [];
+  if (!rows.length) {
+    container.innerHTML = '<p class="hint" style="padding:14px">You hold no brands. Open <b>All markets</b> and launch one — a new brand grows fast for its first minute.</p>';
+    portfolioSignature = 'empty';
+    return;
+  }
+
+  const signature = rows.map((r) => r.id).join(',');
+  if (signature !== portfolioSignature) {
+    portfolioSignature = signature;
+    holdingNodes.clear();
+    container.innerHTML = rows.map((row) => `
+      <div class="holding" data-holding="${row.id}">
+        <div class="top"><b data-role="name">${escape(row.name)}</b><span class="chip" data-role="chip"></span></div>
+        <div class="where" data-role="where"></div>
+        <div class="figures">
+          <span>share <b data-role="share"></b></span>
+          <span>revenue <b data-role="revenue"></b></span>
+          <span>profit <b data-role="profit"></b></span>
+          <span>reach <b data-role="reach"></b></span>
+        </div>
+        <div class="quick">
+          ${['blitz', 'promo', 'push'].map((key) => `
+            <button data-act="${key}" data-brand="${row.id}" data-target="${key === 'push' ? row.market : row.id}">
+              <span>${key === 'push' ? 'Push' : info.actions[key].label.replace('Ad ', '')}</span>
+              <span class="roi" data-roi="${key}"></span>
+            </button>`).join('')}
+        </div>
+        <button class="wide" data-manage="${row.id}" style="margin-top:8px">Manage</button>
+      </div>`).join('');
+
+    for (const row of rows) {
+      const card = container.querySelector(`[data-holding="${row.id}"]`);
+      holdingNodes.set(row.id, {
+        card,
+        chip: card.querySelector('[data-role="chip"]'),
+        where: card.querySelector('[data-role="where"]'),
+        share: card.querySelector('[data-role="share"]'),
+        revenue: card.querySelector('[data-role="revenue"]'),
+        profit: card.querySelector('[data-role="profit"]'),
+        reach: card.querySelector('[data-role="reach"]'),
+        roi: Object.fromEntries(['blitz', 'promo', 'push']
+          .map((key) => [key, card.querySelector(`[data-roi="${key}"]`)])),
+        buttons: Object.fromEntries(['blitz', 'promo', 'push']
+          .map((key) => [key, card.querySelector(`[data-act="${key}"]`)])),
+      });
+    }
+  }
+  paintPortfolio(rows);
+}
+
+function paintPortfolio(rows = state?.portfolio ?? []) {
+  const cooldowns = state?.you?.cooldowns ?? {};
+  for (const row of rows) {
+    const node = holdingNodes.get(row.id);
+    if (!node) continue;
+    node.where.textContent = `${row.marketName}${row.promo ? ' · on promo' : ''}`;
+    node.share.textContent = pct(row.share);
+    node.revenue.textContent = rate(row.revenue);
+    node.profit.textContent = (row.profit >= 0 ? '+' : '') + rate(row.profit);
+    node.profit.style.color = row.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
+    node.reach.textContent = row.equity;
+
+    const trouble = row.profit < 0 ? ['losing money', 'bad']
+      : row.exposed ? ['can be raided', 'bad']
+        : row.launching ? ['launching', 'good'] : ['', ''];
+    node.chip.textContent = trouble[0];
+    node.chip.className = 'chip ' + trouble[1];
+    node.chip.style.display = trouble[0] ? '' : 'none';
+    node.card.classList.toggle('warn', trouble[1] === 'bad');
+
+    // The estimate lives on the detail feed; it is only there for open markets.
+    const detail = detailFor(row.id);
+    for (const key of ['blitz', 'promo', 'push']) {
+      const button = node.buttons[key];
+      const label = node.roi[key];
+      const cd = cooldowns[key] ?? 0;
+      const play = detail?.plays?.[key];
+      button.disabled = cd > 0 || (state?.you?.power ?? 0) < info.actions[key].cost;
+      if (cd > 0) label.textContent = `${Math.ceil(cd)}s`;
+      else if (play) label.textContent = play.worth ? `+${rate(play.gain)}` : money(info.actions[key].cost);
+      else label.textContent = money(info.actions[key].cost);
+      button.classList.toggle('good', Boolean(play?.worth) && cd === 0);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Markets
+// ---------------------------------------------------------------------------
+
 let marketSignature = '';
 const marketNodes = new Map(); // market id -> its live DOM references
 
 /** Rebuild the market list only when *which* cards are shown changes. */
 function renderMarkets() {
+  // The portfolio tab owns the whole column; markets stay out of its way.
+  el('search').style.display = tab === 'portfolio' ? 'none' : '';
+  if (tab === 'portfolio') {
+    if (marketSignature !== 'hidden') { el('markets').innerHTML = ''; marketSignature = 'hidden'; }
+    return;
+  }
   const list = visibleMarkets();
   const signature = `${tab}|${search}|${openMarket}|${list.map(({ meta }) => meta.id).join(',')}`;
   if (signature === marketSignature) return paintMarkets(list);
@@ -987,6 +1151,67 @@ function wireDesk(brand) {
   el('buyBtn')?.addEventListener('click', () => world.send({ type: 'acquire', brand: brand.id }));
 }
 
+// ---------------------------------------------------------------------------
+// Your round, drawn: share of the economy over time, against the win bar
+// ---------------------------------------------------------------------------
+
+const history = []; // { t, share, worth }
+
+function recordHistory() {
+  if (!state?.you) return;
+  const last = history.at(-1);
+  if (last && state.t - last.t < 1) return;
+  if (last && state.t < last.t) history.length = 0; // a new round started
+  history.push({ t: state.t, share: state.you.share, worth: state.you.worth });
+  if (history.length > 900) history.shift();
+}
+
+function drawTrend() {
+  const canvas = el('trend');
+  const width = canvas.clientWidth || 300;
+  const height = canvas.clientHeight || 110;
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(width * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  if (history.length < 2 || !state) return;
+
+  const span = Math.max(state.goal, ...history.map((h) => h.share)) * 1.15;
+  const duration = Math.max(60, history.at(-1).t);
+  const x = (t) => (t / duration) * width;
+  const y = (share) => height - (share / span) * (height - 6) - 3;
+
+  // The win line, so the shape of the round has something to aim at.
+  ctx.strokeStyle = 'rgba(217, 164, 65, 0.55)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, y(state.goal));
+  ctx.lineTo(width, y(state.goal));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.moveTo(x(history[0].t), y(history[0].share));
+  for (const point of history) ctx.lineTo(x(point.t), y(point.share));
+  ctx.strokeStyle = state.you.color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.lineTo(x(history.at(-1).t), height);
+  ctx.lineTo(x(history[0].t), height);
+  ctx.closePath();
+  ctx.fillStyle = state.you.color + '22';
+  ctx.fill();
+
+  const peak = history.reduce((best, h) => (h.share > best.share ? h : best), history[0]);
+  el('trendNow').textContent = pct(state.you.share);
+  el('trendPeak').textContent = `${pct(peak.share)} at ${Math.round(peak.t)}s`;
+}
+
 function renderHud() {
   const you = state?.you;
   if (!you) return;
@@ -1057,8 +1282,13 @@ function renderOverlay() {
 // ---------------------------------------------------------------------------
 
 function reportView() {
-  const rows = visibleMarkets().map(({ row }) => row.id);
-  world.setView({ rows, detail: openMarket === null ? [] : [openMarket] });
+  const rows = visibleMarkets().map(({ meta }) => meta.id);
+  // In the portfolio view, "open" the markets your own brands trade in, so
+  // their play estimates come down with the snapshot.
+  const detail = tab === 'portfolio'
+    ? [...new Set((state?.portfolio ?? []).map((row) => row.market))].slice(0, 4)
+    : openMarket === null ? [] : [openMarket];
+  world.setView({ rows, detail });
 }
 
 function loop(now) {
@@ -1072,9 +1302,12 @@ function loop(now) {
       info = info ?? world.info();
       if (now - lastPaint > 180) {
         lastPaint = now;
+        renderPortfolio();
         renderMarkets();
         renderDesk();
         renderHud();
+        recordHistory();
+        drawTrend();
         renderOverlay();
       }
     }
@@ -1086,6 +1319,20 @@ function loop(now) {
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
+
+el('portfolio').addEventListener('click', (event) => {
+  const play = event.target.closest('[data-act]');
+  if (play) {
+    world.send({ type: 'action', key: play.dataset.act, target: Number(play.dataset.target) });
+    return;
+  }
+  const manage = event.target.closest('[data-manage]');
+  if (manage) {
+    selected = Number(manage.dataset.manage);
+    renderDesk();
+    if (isPhone()) el('desk').classList.add('open');
+  }
+});
 
 el('markets').addEventListener('click', (event) => {
   const openButton = event.target.closest('[data-open]');
@@ -1136,6 +1383,7 @@ for (const button of document.querySelectorAll('[data-tab]')) {
       other.classList.toggle('on', other === button);
     }
     reportView();
+    renderPortfolio();
     renderMarkets();
   });
 }
@@ -1149,7 +1397,9 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'Escape') closeSheet();
   if (event.code === 'Space' && event.target === document.body) { event.preventDefault(); el('playBtn').click(); }
 });
-setInterval(() => { if (world?.kind === 'remote') reportView(); }, 1000);
+// Both worlds need this: it is what tells the snapshot which markets to send
+// brand detail for, and the play estimates ride along with that detail.
+setInterval(() => { if (world) reportView(); }, 1000);
 
 // Straight into a game: single player needs no server and no lobby. The
 // Rooms button opens the lobby for a different world size, or to join a

@@ -22,7 +22,15 @@ async function inline(specifier, base, seen, chunks) {
   seen.add(url.href);
 
   const source = await readFile(url, 'utf8');
-  for (const [, , dep] of source.matchAll(IMPORT)) await inline(dep, url, seen, chunks);
+  for (const [, names, dep] of source.matchAll(IMPORT)) {
+    // Inlining flattens every module into one scope, so a renamed import
+    // (`x as y`) would leave `y` undefined in the bundle while the served
+    // version works perfectly. Catch it here rather than in the browser.
+    if (/\bas\b/.test(names)) {
+      throw new Error(`${specifier}: renamed import (${names.trim()}) cannot be inlined — import it under its own name`);
+    }
+    await inline(dep, url, seen, chunks);
+  }
 
   // Every export in these modules is a declaration (`export function`,
   // `export const`), so dropping the keyword leaves valid top-level code.

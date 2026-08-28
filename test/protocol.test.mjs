@@ -48,9 +48,14 @@ test('a scoped snapshot still always includes your own markets', () => {
 test('scoping is what keeps a hundred-player snapshot small', () => {
   const game = createGame({ players: 100, rng: seeded(9) });
   const size = (value) => JSON.stringify(value).length;
+  // What a client actually displays, against what an unscoped client would
+  // need: every market row and every brand in the world.
   const scoped = size(snapshot(game, 0, { rows: [0, 1, 2, 3, 4, 5, 6, 7], detail: [0] }));
-  const everything = size(snapshot(game, 0));
-  assert.ok(scoped < everything / 2, `scoped ${scoped} should be far under ${everything}`);
+  const everything = size(snapshot(game, 0, {
+    rows: game.markets.map((m) => m.id),
+    detail: game.markets.map((m) => m.id),
+  }));
+  assert.ok(scoped < everything / 5, `scoped ${scoped} should be far under ${everything}`);
   assert.ok(scoped < 12_000, `a client snapshot should stay small, got ${scoped}`);
 });
 
