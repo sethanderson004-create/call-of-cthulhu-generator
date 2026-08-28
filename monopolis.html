@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Monopolis — Corner the Market</title>
-<meta name="description" content="A real-time strategy game about building a business empire: set prices, fund marketing, and buy out rival brands until you own half the economy." />
+<meta name="description" content="A real-time strategy game about building a business empire: launch brands, set prices, run campaigns, and buy out rivals until you own half the economy." />
+<meta name="theme-color" content="#080b10" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d1218'/%3E%3Crect x='3' y='9' width='2.6' height='4' fill='%234aa3d9'/%3E%3Crect x='6.7' y='5.5' width='2.6' height='7.5' fill='%237fd6a1'/%3E%3Crect x='10.4' y='3' width='2.6' height='10' fill='%23d9a441'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
 <style>
   :root {
-    --page: #070a0e;
+    --page: #080b10;
     --surface: #0e141b;
     --surface-2: #131d26;
     --raised: #18242f;
@@ -24,232 +25,280 @@
     --mint: #7fd6a1;
     --sky: #4aa3d9;
     --rose: #c2607f;
-    /* A financial-press pairing: broadsheet serif for names, a plain
-       grotesque for interface text, and one mono for every figure. */
     --display: "Bodoni Moda", "Times New Roman", Georgia, serif;
     --sans: Archivo, system-ui, -apple-system, "Segoe UI", sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --tap: 44px; /* Minimum comfortable touch target. */
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: contain; }
   body {
     margin: 0;
     background: radial-gradient(1100px 640px at 78% -12%, #16222e 0%, var(--page) 62%);
+    background-attachment: fixed;
     color: var(--ink);
     font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
   }
   h1 {
     margin: 0;
     font-family: var(--display);
     font-weight: 700;
-    font-size: 25px;
+    font-size: 23px;
     letter-spacing: -0.01em;
   }
   h1 span { color: var(--gold); }
-  .mono { font-family: var(--mono); }
-  .metric b, .row b, td, .brand .right, .brand .meta, .card .sub {
+  .mono, .metric b, .row b, td, .brand .right, .brand .meta, .card .sub {
+    font-family: var(--mono);
     font-variant-numeric: tabular-nums;
   }
 
-  /* ---- top bar ------------------------------------------------------ */
+  /* ---- heads-up display --------------------------------------------- */
   #hud {
     position: sticky;
     top: 0;
-    z-index: 5;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 18px;
-    padding: 12px 20px;
-    background: rgba(8, 12, 16, 0.92);
-    backdrop-filter: blur(8px);
+    z-index: 20;
+    padding: 9px 14px 0;
+    background: rgba(8, 11, 16, 0.94);
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
   }
-  .metric { display: flex; flex-direction: column; line-height: 1.25; }
+  #hudTop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .metrics { display: flex; gap: 14px; flex: 1 1 auto; flex-wrap: wrap; }
+  .metric { display: flex; flex-direction: column; line-height: 1.2; }
   .metric small {
-    font-size: 10px;
-    letter-spacing: 0.14em;
+    font-size: 9.5px;
+    letter-spacing: 0.13em;
     text-transform: uppercase;
     color: var(--ink-faint);
   }
-  .metric b { font-family: var(--mono); font-size: 15px; font-weight: 600; }
-  .spacer { flex: 1 1 auto; }
-  button {
-    font: inherit;
-    font-size: 13px;
-    color: var(--ink);
-    background: var(--raised);
-    border: 1px solid var(--border-strong);
-    border-radius: 7px;
-    padding: 7px 13px;
-    cursor: pointer;
-  }
-  button:hover:not(:disabled) { border-color: var(--mint); color: var(--mint); }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  button.gold { border-color: var(--gold); color: var(--gold); background: rgba(217,164,65,0.12); }
-
-  /* ---- goal bar ------------------------------------------------------ */
-  #goal { width: 100%; }
+  .metric b { font-size: 15px; font-weight: 600; }
+  .metric.slim { display: none; }
   #goalTrack {
     position: relative;
-    height: 8px;
+    height: 7px;
     border-radius: 4px;
     background: rgba(255,255,255,0.06);
     overflow: hidden;
+    margin: 8px 0;
   }
-  #goalTrack i { position: absolute; top: 0; bottom: 0; left: 0; }
-  #goalTrack .mark {
-    position: absolute; top: -3px; bottom: -3px;
-    width: 2px; background: var(--gold); opacity: 0.85;
+  #goalTrack i { position: absolute; top: 0; bottom: 0; }
+  #goalTrack .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--gold); }
+
+  button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--raised);
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    padding: 0 13px;
+    min-height: 38px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled { opacity: 0.38; cursor: not-allowed; }
+  button.gold { border-color: var(--gold); color: var(--gold); background: rgba(217,164,65,0.13); }
+  button.wide { width: 100%; min-height: var(--tap); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  @media (hover: hover) {
+    button:hover:not(:disabled) { border-color: var(--mint); color: var(--mint); }
+    button.gold:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
   }
 
   main {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    gap: 18px;
-    padding: 18px 20px 40px;
+    grid-template-columns: minmax(0, 1fr) 350px;
+    gap: 16px;
+    padding: 14px;
     align-items: start;
   }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  #markets { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; }
 
-  #markets { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
   .card {
     background: linear-gradient(180deg, var(--surface-2), var(--surface));
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 13px 10px;
+    border-radius: 13px;
+    padding: 11px 12px 9px;
   }
+  .cardhead { display: flex; align-items: baseline; gap: 8px; }
   .card h3 {
     margin: 0;
     font-family: var(--display);
     font-weight: 600;
     font-size: 19px;
-    letter-spacing: -0.005em;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
+    flex: 1 1 auto;
   }
-  .card .sub { color: var(--ink-faint); font-size: 11.5px; margin: 2px 0 9px; font-family: var(--mono); }
+  .card .sub { color: var(--ink-faint); font-size: 11.5px; margin: 2px 0 8px; }
   .tag {
-    font-size: 10px;
+    font-size: 9.5px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    padding: 2px 6px;
+    padding: 3px 7px;
     border-radius: 999px;
     border: 1px solid var(--border-strong);
     color: var(--ink-dim);
+    white-space: nowrap;
   }
   .tag.hot { color: var(--gold); border-color: var(--gold); }
 
-  /* the one visual that carries the whole game: who owns this market */
-  .sharebar {
-    display: flex;
-    height: 22px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #0a1015;
-    margin-bottom: 9px;
-  }
-  .sharebar > span {
-    transition: width 0.25s linear;
-    border-right: 1px solid rgba(0,0,0,0.45);
-    position: relative;
-  }
+  /* The one visual that carries the game: who owns this market. */
+  .sharebar { display: flex; height: 20px; border-radius: 6px; overflow: hidden; background: #0a1015; }
+  .sharebar > span { transition: width 0.3s linear; border-right: 1px solid rgba(0,0,0,0.45); }
   .sharebar > span:last-child { border-right: none; }
 
   .brand {
     display: grid;
     grid-template-columns: 10px 1fr auto;
     align-items: center;
-    gap: 9px;
-    padding: 5px 6px;
-    border-radius: 7px;
+    gap: 10px;
+    min-height: var(--tap);
+    padding: 6px 7px;
+    margin-top: 4px;
+    border-radius: 9px;
     cursor: pointer;
     border: 1px solid transparent;
   }
-  .brand:hover { background: rgba(255,255,255,0.035); }
   .brand.selected { border-color: var(--border-strong); background: rgba(255,255,255,0.05); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; }
-  .brand .nm { font-size: 13px; display: flex; align-items: center; gap: 6px; }
-  .brand .meta { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
-  .brand .right { font-family: var(--mono); font-size: 12px; text-align: right; }
-  .flag { color: var(--rose); font-size: 11px; }
-  .equity { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); margin-top: 3px; width: 90px; }
-  .equity > i { display: block; height: 100%; border-radius: 2px; background: var(--sky); }
+  .brand.mine { background: rgba(127, 214, 161, 0.06); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .brand .nm { font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+  .brand .meta { font-size: 11px; color: var(--ink-faint); display: block; margin-top: 1px; }
+  .brand .right { font-size: 13px; text-align: right; }
+  .flag { color: var(--rose); font-size: 10.5px; white-space: nowrap; }
+  .newtag { color: var(--sky); font-size: 10.5px; }
+  .launch { margin-top: 8px; }
 
-  /* ---- side rail ----------------------------------------------------- */
+  /* ---- side rail / bottom sheet -------------------------------------- */
   .panel {
     background: linear-gradient(180deg, var(--surface-2), var(--surface));
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 13px 14px;
+    border-radius: 13px;
+    padding: 12px 13px;
   }
-  .panel + .panel { margin-top: 14px; }
+  .panel + .panel { margin-top: 12px; }
   .panel h2 {
     margin: 0 0 9px;
-    font-size: 11px;
+    font-size: 10.5px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
-  .row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
-  .row b { font-family: var(--mono); font-weight: 600; }
-  label.lever { display: block; font-size: 12px; color: var(--ink-dim); margin: 11px 0 0; }
+  .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 3px 0; }
+  .row b { font-weight: 600; }
+  .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 11px 0 4px; }
+  .actions button { padding: 6px 4px; min-height: 52px; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; }
+  .actions .cost { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); }
+  .actions button:disabled .cost { color: inherit; }
+  details.levers { margin-top: 10px; }
+  details.levers > summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink-dim);
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+  }
+  label.lever { display: block; font-size: 12px; color: var(--ink-dim); margin: 9px 0 0; }
   label.lever .val { float: right; font-family: var(--mono); color: var(--ink); }
-  input[type=range] { width: 100%; accent-color: var(--gold); margin-top: 3px; }
-  .hint { font-size: 11.5px; color: var(--ink-faint); line-height: 1.5; margin: 7px 0 0; }
+  input[type=range] { width: 100%; accent-color: var(--gold); height: 30px; }
+  .hint { font-size: 11.5px; color: var(--ink-faint); line-height: 1.5; margin: 6px 0 0; }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  th { text-align: left; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); padding-bottom: 5px; }
-  td { padding: 4px 0; border-top: 1px solid var(--border); font-family: var(--mono); }
+  th { text-align: left; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); padding-bottom: 5px; }
+  td { padding: 5px 0; border-top: 1px solid var(--border); }
   td.nm { font-family: var(--sans); }
   tr.out td { color: var(--ink-faint); text-decoration: line-through; }
-  #ticker { max-height: 168px; overflow-y: auto; font-size: 12px; line-height: 1.5; }
-  #ticker div { padding: 2px 0; border-top: 1px solid var(--border); color: var(--ink-dim); }
+  #ticker { max-height: 150px; overflow-y: auto; font-size: 12px; line-height: 1.5; }
+  #ticker div { padding: 3px 0; border-top: 1px solid var(--border); color: var(--ink-dim); }
   #ticker div:first-child { border-top: none; }
+  #sheetClose { display: none; }
+
+  /* ---- phones: one column, desk becomes a bottom sheet ---------------- */
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; padding: 10px 10px 96px; gap: 12px; }
+    #markets { grid-template-columns: 1fr; }
+    .metric.wide { display: none; }
+    .metric.slim { display: flex; }
+    h1 { font-size: 17px; width: 100%; }
+    #hudTop { gap: 8px 10px; }
+    .metrics { gap: 12px; }
+    .metric b { font-size: 14px; }
+    #hud button { min-height: 34px; padding: 0 11px; font-size: 12.5px; }
+    #goalTrack { margin: 7px 0; }
+    #desk {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      max-height: 78vh;
+      overflow-y: auto;
+      border-radius: 16px 16px 0 0;
+      border-bottom: none;
+      margin: 0;
+      padding-bottom: calc(14px + env(safe-area-inset-bottom));
+      box-shadow: 0 -18px 40px rgba(0,0,0,0.55);
+      transform: translateY(102%);
+      transition: transform 0.22s ease-out;
+    }
+    #desk.open { transform: translateY(0); }
+    #sheetClose { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 14px; }
+    #deskGrip {
+      width: 38px; height: 4px; border-radius: 2px;
+      background: var(--border-strong); margin: 0 auto 10px;
+    }
+    aside .panel:not(#desk) { margin-top: 12px; }
+  }
+  @media (min-width: 861px) { #deskGrip { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    #desk, .sharebar > span { transition: none; }
+  }
 
   #overlay {
     position: fixed;
     inset: 0;
     display: none;
     place-items: center;
-    background: rgba(5, 8, 11, 0.86);
-    z-index: 10;
-    padding: 24px;
+    background: rgba(5, 8, 11, 0.88);
+    z-index: 40;
+    padding: 22px;
   }
   #overlay.show { display: grid; }
-  #overlay .box { max-width: 460px; text-align: center; }
+  #overlay .box { max-width: 440px; text-align: center; }
   #overlay h2 {
-    margin: 0 0 8px;
+    margin: 0 0 10px;
     font-family: var(--display);
     font-weight: 700;
-    font-size: 40px;
-    letter-spacing: -0.01em;
-    text-transform: none;
+    font-size: 36px;
     color: var(--ink);
   }
   #overlay p { color: var(--ink-dim); line-height: 1.6; }
-  footer { padding: 0 20px 30px; color: var(--ink-faint); font-size: 12px; }
+  footer { padding: 0 14px 26px; color: var(--ink-faint); font-size: 11.5px; }
 </style>
 </head>
 <body>
 
 <div id="hud">
-  <h1>Mono<span>polis</span></h1>
-  <div class="metric"><small>Cash</small><b id="mCash">—</b></div>
-  <div class="metric"><small>Profit</small><b id="mProfit">—</b></div>
-  <div class="metric"><small>Debt</small><b id="mDebt">—</b></div>
-  <div class="metric"><small>Net worth</small><b id="mWorth">—</b></div>
-  <div class="metric"><small>Your share</small><b id="mShare">—</b></div>
-  <div class="metric"><small>Cost pressure</small><b id="mPressure">—</b></div>
-  <div class="spacer"></div>
-  <button class="gold" id="playBtn">Pause</button>
-  <button id="newBtn">New economy</button>
-  <label class="lever" style="margin:0;width:130px">Speed <span class="val" id="speedVal">2×</span>
-    <input type="range" id="speed" min="1" max="6" step="1" value="2" />
-  </label>
-  <div id="goal">
-    <div id="goalTrack"></div>
+  <div id="hudTop">
+    <h1>Mono<span>polis</span></h1>
+    <div class="metrics">
+      <div class="metric"><small>Cash</small><b id="mCash">—</b></div>
+      <div class="metric"><small>Profit</small><b id="mProfit">—</b></div>
+      <div class="metric"><small>Share</small><b id="mShare">—</b></div>
+      <div class="metric wide"><small>Debt</small><b id="mDebt">—</b></div>
+      <div class="metric wide"><small>Net worth</small><b id="mWorth">—</b></div>
+      <div class="metric wide"><small>Brands</small><b id="mBrands">—</b></div>
+    </div>
+    <button class="gold" id="playBtn">Pause</button>
+    <button id="speedBtn">2×</button>
+    <button id="newBtn">New</button>
   </div>
+  <div id="goalTrack"></div>
 </div>
 
 <main>
@@ -257,8 +306,9 @@
 
   <aside>
     <div class="panel" id="desk">
-      <h2>Brand desk</h2>
-      <div id="deskBody"><p class="hint">Pick any brand to inspect it. Brands you own get price and marketing controls; brands you don't get a takeover price.</p></div>
+      <div id="deskGrip"></div>
+      <h2><span>Brand desk</span><button id="sheetClose">Close</button></h2>
+      <div id="deskBody"><p class="hint">Tap any brand to run it. Your own brands get one-tap campaigns; everyone else's show a takeover price.</p></div>
     </div>
 
     <div class="panel">
@@ -275,17 +325,18 @@
     <div class="panel">
       <h2>How to win</h2>
       <p class="hint">
-        <b>Share is bought two ways.</b> Cut your price or out-advertise a rival to take
-        customers inside a market; buy the brand outright to take the whole slice at once.<br><br>
-        <b>Price is a trade.</b> High prices earn more per unit and bleed share — badly in
-        price-sensitive categories like Airlines and Grocery, barely at all in Semiconductors.<br><br>
-        <b>Marketing decays.</b> Equity is what you're really buying, and it rots the second
-        you stop paying for it.<br><br>
-        <b>You can only raid the weak.</b> A brand is takeable when it's starved below 15%
-        of its market, its parent is over-leveraged, or you already out-hold that parent in
-        that category. So win a category first, then buy the losers in it.<br><br>
-        <b>Costs rise all game.</b> Standoffs get expensive; someone's balance sheet always
-        breaks. Reach <b>50% of all revenue</b> before it's yours.
+        <b>Build or buy.</b> Launch your own brand into a market for a low price and grow it —
+        new brands convert advertising into recognition far faster for their first minute —
+        or pay a premium to take someone else's, and get their whole slice today.<br><br>
+        <b>Price is a trade.</b> Charge more per unit and lose customers — badly in Airlines
+        and Grocery, hardly at all in Semiconductors.<br><br>
+        <b>Campaigns are one tap.</b> A blitz buys recognition outright, a promotion cuts your
+        price for a while, and a category push grows the whole market's demand.<br><br>
+        <b>You can only raid the weak.</b> Take a rival's brand when it's starved below 15% of
+        its market, when its parent is deep in debt, or when you already out-hold that parent
+        in that category. Firms with three brands or fewer are off-limits.<br><br>
+        <b>Scale pays.</b> Brands you run side by side in one market share their costs, so
+        winning a category makes the next one cheaper. Reach <b>50% of all revenue</b> to win.
       </p>
     </div>
   </aside>
@@ -296,34 +347,36 @@
 <div id="overlay"><div class="box">
   <h2 id="ovTitle">—</h2>
   <p id="ovText"></p>
-  <button class="gold" id="ovBtn">New economy</button>
+  <button class="gold wide" id="ovBtn">New economy</button>
 </div></div>
 
 <script type="module">
 import {
   createGame, tick, standings, brandsIn, ownedBrands, computeShares,
-  setPrice, setMarketing, setCategorySpend, acquire, canAcquire, divest,
-  brandValue, acquisitionPrice, netWorth, firmProfit, economyShare,
-  creditLimit, buyingPower, costPressure, categoryGrip, isNeglected, inDistress,
-  MONOPOLY_SHARE, MIN_PRICE, MAX_PRICE, MAX_EQUITY, OPENING_GRACE,
+  setPrice, setMarketing, acquire, canAcquire, divest, launchBrand, canLaunch,
+  launchCost, runAction, canRunAction, brandValue, acquisitionPrice, netWorth,
+  firmProfit, economyShare, creditLimit, buyingPower, categoryGrip, effectivePrice,
+  launchMomentum, isNeglected, marketDemand,
+  ACTIONS, MONOPOLY_SHARE, MIN_PRICE, MAX_PRICE, MAX_EQUITY, OPENING_GRACE,
 } from './src/monopolis.js';
 
 const el = (id) => document.getElementById(id);
 const money = (n) => (n < 0 ? '-' : '') + '$' + (Math.abs(n) >= 1000
   ? (Math.abs(n) / 1000).toFixed(1) + 'k' : Math.abs(n).toFixed(0));
 const pct = (n) => (n * 100).toFixed(0) + '%';
+const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
 
-let game, selected = null, playing = true, speed = 2;
+const SPEEDS = [1, 2, 4, 8];
+let game, selected = null, playing = true, speedIndex = 1;
 let last = performance.now();
 let lastHud = 0;
-let deskOwner; // Redraw the desk when the selected brand changes hands.
-const refs = new Map(); // brandId -> the DOM nodes we update every frame
+let deskSignature = ''; // Rebuild the desk when what it shows structurally changes.
+const refs = new Map();
 
-/** Independents are grey; owned brands take their conglomerate's colour. */
 const brandColor = (b) => (b.owner === null ? '#4c5f70' : game.firms[b.owner].color);
 
 // ---------------------------------------------------------------------------
-// Build the market cards once per game; only their numbers change after that.
+// Market cards — built once per game, then only their numbers change.
 // ---------------------------------------------------------------------------
 function buildBoard() {
   refs.clear();
@@ -331,205 +384,260 @@ function buildBoard() {
   for (const market of game.markets) {
     const card = document.createElement('div');
     card.className = 'card';
-
     const sensitivity = market.elasticity > 1.9 ? 'price-sensitive'
       : market.elasticity < 1.1 ? 'price-blind' : 'balanced';
     card.innerHTML = `
-      <h3>${market.name} <span class="tag" id="buzz-${market.id}">—</span></h3>
-      <div class="sub" id="sub-${market.id}"></div>
-      <div class="sharebar" id="bar-${market.id}"></div>
-      <div id="brands-${market.id}"></div>
-      <div class="sub" style="margin:6px 0 0">${sensitivity} · ad power ×${market.adPower.toFixed(2)} · unit cost $${market.unitCost.toFixed(2)}</div>`;
+      <div class="cardhead"><h3>${market.name}</h3><span class="tag" data-role="buzz">—</span></div>
+      <div class="sub" data-role="sub"></div>
+      <div class="sharebar" data-role="bar"></div>
+      <div data-role="brands"></div>
+      <button class="launch wide" data-role="launch"></button>
+      <div class="sub" style="margin:7px 0 0">${sensitivity} · ad power ×${market.adPower.toFixed(2)} · unit cost $${market.unitCost.toFixed(2)}</div>`;
     el('markets').appendChild(card);
 
-    const bar = card.querySelector(`#bar-${market.id}`);
-    const list = card.querySelector(`#brands-${market.id}`);
-
-    for (const brand of brandsIn(game, market)) {
-      const seg = document.createElement('span');
-      seg.title = brand.name;
-      bar.appendChild(seg);
-
-      const row = document.createElement('div');
-      row.className = 'brand';
-      row.innerHTML = `
-        <span class="dot"></span>
-        <span>
-          <span class="nm">${brand.name} <span class="flag"></span></span>
-          <span class="meta"></span>
-          <span class="equity"><i></i></span>
-        </span>
-        <span class="right"></span>`;
-      row.addEventListener('click', () => select(brand.id));
-      list.appendChild(row);
-
-      refs.set(brand.id, {
-        seg, row,
-        dot: row.querySelector('.dot'),
-        flag: row.querySelector('.flag'),
-        meta: row.querySelector('.meta'),
-        equity: row.querySelector('.equity > i'),
-        right: row.querySelector('.right'),
-      });
-    }
-    refs.set(`m${market.id}`, {
-      buzz: card.querySelector(`#buzz-${market.id}`),
-      sub: card.querySelector(`#sub-${market.id}`),
+    const launch = card.querySelector('[data-role="launch"]');
+    launch.addEventListener('click', () => {
+      const result = launchBrand(game, 0, market.id);
+      if (result.ok) { buildBoard(); select(result.brand.id); }
     });
+
+    refs.set(`m${market.id}`, {
+      card,
+      buzz: card.querySelector('[data-role="buzz"]'),
+      sub: card.querySelector('[data-role="sub"]'),
+      bar: card.querySelector('[data-role="bar"]'),
+      list: card.querySelector('[data-role="brands"]'),
+      launch,
+    });
+    for (const brand of brandsIn(game, market)) addBrandRow(market, brand);
   }
+}
+
+function addBrandRow(market, brand) {
+  const m = refs.get(`m${market.id}`);
+  const seg = document.createElement('span');
+  seg.title = brand.name;
+  m.bar.appendChild(seg);
+
+  const row = document.createElement('div');
+  row.className = 'brand';
+  row.innerHTML = `
+    <span class="dot"></span>
+    <span>
+      <span class="nm">${brand.name} <span class="flag"></span></span>
+      <span class="meta"></span>
+    </span>
+    <span class="right"></span>`;
+  row.addEventListener('click', () => select(brand.id));
+  m.list.appendChild(row);
+
+  refs.set(brand.id, {
+    seg, row,
+    dot: row.querySelector('.dot'),
+    flag: row.querySelector('.flag'),
+    meta: row.querySelector('.meta'),
+    right: row.querySelector('.right'),
+  });
 }
 
 function paintBoard() {
   for (const market of game.markets) {
     const m = refs.get(`m${market.id}`);
     const grip = categoryGrip(game, 0, market.id);
-    m.sub.textContent = `${money(brandsIn(game, market).reduce((s, b) => s + b.revenue, 0))}/s`
-      + ` · you hold ${pct(grip)}`;
-    const hot = market.buzz > 0.15;
-    m.buzz.textContent = hot ? `buzz +${pct(market.buzz * 0.55)}` : 'no campaign';
+    m.sub.textContent = `${money(marketDemand(game, market))}/s demand · you hold ${pct(grip)}`;
+    const hot = market.buzz > 0.12;
+    m.buzz.textContent = hot ? `demand +${pct(market.buzz * 0.55)}` : 'steady demand';
     m.buzz.className = hot ? 'tag hot' : 'tag';
+
+    const check = canLaunch(game, 0, market.id);
+    m.launch.textContent = check.ok
+      ? `Launch a brand — ${money(check.cost)}`
+      : check.reason === 'not enough capital'
+        ? `Launch a brand — ${money(check.cost)} (need ${money(check.cost - buyingPower(game, 0))} more)`
+        : `Can't launch — ${check.reason}`;
+    m.launch.disabled = !check.ok;
 
     for (const brand of brandsIn(game, market)) {
       const r = refs.get(brand.id);
+      if (!r) continue;
       const color = brandColor(brand);
       r.seg.style.width = (brand.share * 100).toFixed(2) + '%';
       r.seg.style.background = color;
-      r.seg.style.opacity = brand.owner === null ? 0.45 : 0.9;
+      r.seg.style.opacity = brand.owner === null ? 0.45 : 0.92;
       r.dot.style.background = color;
-      r.equity.style.width = (brand.equity / MAX_EQUITY * 100).toFixed(0) + '%';
 
       const owner = brand.owner === null ? 'independent'
         : brand.owner === 0 ? 'yours' : game.firms[brand.owner].name;
-      r.meta.textContent = `${owner} · $${brand.price.toFixed(2)} · eq ${brand.equity.toFixed(0)}`;
+      const promo = game.time < brand.promoUntil ? ' · on promo' : '';
+      r.meta.textContent = `${owner} · $${effectivePrice(game, brand).toFixed(2)} · reach ${brand.equity.toFixed(0)}${promo}`;
       r.right.textContent = pct(brand.share);
       r.right.style.color = brand.owner === 0 ? 'var(--mint)' : 'var(--ink-dim)';
 
       const takeable = brand.owner !== 0 && canAcquire(game, 0, brand.id).ok;
-      r.flag.textContent = takeable ? '● in play' : (brand.owner !== null && isNeglected(game, brand.id) ? '○ weak' : '');
+      const freshlyLaunched = brand.born > 0 && launchMomentum(game, brand) > 1.05;
+      r.flag.innerHTML = freshlyLaunched
+        ? `<span class="newtag">launching ${Math.ceil((brand.born + 75 - game.time))}s</span>`
+        : takeable ? '● in play'
+          : brand.owner !== null && isNeglected(game, brand.id) ? '○ weak' : '';
       r.row.classList.toggle('selected', selected === brand.id);
+      r.row.classList.toggle('mine', brand.owner === 0);
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Brand desk — the only place with controls, so sliders never get rebuilt.
+// Brand desk — one-tap campaigns first, sliders tucked behind a disclosure.
 // ---------------------------------------------------------------------------
 function select(brandId) {
   selected = brandId;
+  deskSignature = '';
   renderDesk();
+  if (isPhone()) el('desk').classList.add('open');
+}
+
+function closeSheet() {
+  el('desk').classList.remove('open');
 }
 
 function renderDesk() {
-  const body = el('deskBody');
   if (selected === null) return;
   const brand = game.brands[selected];
   const market = game.markets[brand.marketId];
   const mine = brand.owner === 0;
-  const check = mine ? null : canAcquire(game, 0, selected);
-  deskOwner = brand.owner;
+  deskSignature = `${selected}:${brand.owner}`;
 
-  body.innerHTML = `
+  el('deskBody').innerHTML = `
     <div class="row"><span><b style="color:${brandColor(brand)}">${brand.name}</b></span>
       <span class="mono">${market.name}</span></div>
     <div class="row"><span>Owner</span><b>${brand.owner === null ? 'Independent'
-      : brand.owner === 0 ? 'You' : game.firms[brand.owner].name}</b></div>
+      : mine ? 'You' : game.firms[brand.owner].name}</b></div>
     <div class="row"><span>Share of ${market.name}</span><b id="dShare">—</b></div>
     <div class="row"><span>Revenue</span><b id="dRev">—</b></div>
     <div class="row"><span>Profit</span><b id="dProfit">—</b></div>
-    <div class="row"><span>Brand equity</span><b id="dEq">—</b></div>
+    <div class="row"><span>Customer reach</span><b id="dEq">—</b></div>
     <div id="deskControls"></div>`;
 
-  const controls = el('deskControls');
-  if (mine) {
-    controls.innerHTML = `
-      <label class="lever">Price <span class="val" id="pVal"></span>
-        <input type="range" id="pRange" min="${MIN_PRICE * 100}" max="${MAX_PRICE * 100}" value="${brand.price * 100}" />
-      </label>
-      <p class="hint">Undercut to take share; charge more to widen the margin. This market is
-        ${market.elasticity > 1.9 ? 'very' : market.elasticity < 1.1 ? 'barely' : 'moderately'}
-        price-sensitive (elasticity ${market.elasticity.toFixed(1)}).</p>
-      <label class="lever">Marketing <span class="val" id="aVal"></span>
-        <input type="range" id="aRange" min="0" max="40" step="0.5" value="${brand.marketing}" />
-      </label>
-      <p class="hint">Buys brand equity, which decays if you stop.</p>
-      <label class="lever">${market.name} category campaign <span class="val" id="cVal"></span>
-        <input type="range" id="cRange" min="0" max="30" step="1" value="${market.categorySpend || 0}" />
-      </label>
-      <p class="hint">Grows the whole category — worth it only where you already hold the biggest
-        slice (you hold ${pct(categoryGrip(game, 0, market.id))}).</p>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="sellBtn">Divest for ${money(brandValue(game, selected) * 0.85)}</button>
-      </div>`;
-
-    const price = el('pRange');
-    price.addEventListener('input', () => {
-      setPrice(game, 0, selected, Number(price.value) / 100);
-      el('pVal').textContent = '$' + (Number(price.value) / 100).toFixed(2);
-    });
-    const ads = el('aRange');
-    ads.addEventListener('input', () => {
-      setMarketing(game, 0, selected, Number(ads.value));
-      el('aVal').textContent = money(Number(ads.value)) + '/s';
-    });
-    const cat = el('cRange');
-    cat.addEventListener('input', () => {
-      setCategorySpend(game, 0, market.id, Number(cat.value));
-      el('cVal').textContent = money(Number(cat.value)) + '/s';
-    });
-    el('pVal').textContent = '$' + brand.price.toFixed(2);
-    el('aVal').textContent = money(brand.marketing) + '/s';
-    el('cVal').textContent = money(market.categorySpend || 0) + '/s';
-    el('sellBtn').addEventListener('click', () => {
-      divest(game, 0, selected);
-      renderDesk();
-    });
-  } else {
-    const price = acquisitionPrice(game, 0, selected);
-    const owner = brand.owner === null ? null : game.firms[brand.owner];
-    const why = check.reason === 'markets still opening'
-      ? `Markets open at ${OPENING_GRACE}s.`
-      : check.reason === 'not enough capital'
-        ? `You can raise ${money(buyingPower(game, 0))} — cash plus ${money(Math.max(0, creditLimit(game, 0) - game.firms[0].debt))} of credit.`
-        : check.reason === 'owner is not vulnerable' && owner
-          ? `${owner.name} is healthy and outholds you in ${market.name}. Starve this brand below 15% share, or take the category yourself, then come back.`
-          : '';
-    controls.innerHTML = `
-      <div class="row"><span>Takeover price</span><b id="buyPrice">${money(price)}</b></div>
-      <p class="hint">${owner === null ? 'An independent — a clean buy at a small premium.'
-        : `A hostile bid carries a 55% premium, and the cash goes straight to ${owner.name}.`}</p>
-      <button class="gold" id="buyBtn" style="width:100%;margin-top:6px" ${check.ok ? '' : 'disabled'}>
-        ${check.ok ? `Acquire for ${money(price)}` : `Can't buy — ${check.reason}`}
-      </button>
-      <p class="hint">${why}</p>`;
-    el('buyBtn').addEventListener('click', () => {
-      if (acquire(game, 0, selected).ok) renderDesk();
-    });
-  }
+  el('deskControls').innerHTML = mine ? ownedControls(brand, market) : rivalControls(brand);
+  wireControls(brand, market, mine);
   paintDesk();
 }
 
-/** The live numbers inside the desk, refreshed every frame. */
+function ownedControls(brand, market) {
+  return `
+    <div class="actions">
+      <button data-act="blitz" data-target="${brand.id}"><span>Ad blitz</span><span class="cost"></span></button>
+      <button data-act="promo" data-target="${brand.id}"><span>Promotion</span><span class="cost"></span></button>
+      <button data-act="push" data-target="${market.id}"><span>Push ${market.name}</span><span class="cost"></span></button>
+    </div>
+    <p class="hint" id="actHint">A blitz buys recognition instantly. A promotion discounts this brand for
+      ${ACTIONS.promo.duration}s. A push lifts demand for every brand in ${market.name} — worth it where
+      you hold the biggest slice.</p>
+    <details class="levers">
+      <summary>Fine control — price and marketing budget</summary>
+      <label class="lever">Price <span class="val" id="pVal"></span>
+        <input type="range" id="pRange" min="${MIN_PRICE * 100}" max="${MAX_PRICE * 100}" value="${brand.price * 100}" />
+      </label>
+      <label class="lever">Marketing <span class="val" id="aVal"></span>
+        <input type="range" id="aRange" min="0" max="40" step="0.5" value="${brand.marketing}" />
+      </label>
+      <p class="hint">${market.name} is
+        ${market.elasticity > 1.9 ? 'very' : market.elasticity < 1.1 ? 'barely' : 'moderately'}
+        price-sensitive (elasticity ${market.elasticity.toFixed(1)}). Marketing decays if you stop.</p>
+    </details>
+    <button class="wide" id="sellBtn" style="margin-top:10px"></button>`;
+}
+
+function rivalControls(brand) {
+  const owner = brand.owner === null ? null : game.firms[brand.owner];
+  return `
+    <div class="row"><span>Takeover price</span><b id="buyPrice">—</b></div>
+    <p class="hint">${owner === null
+      ? 'An independent — a clean buy at a small premium.'
+      : `A hostile bid carries a ${pct(0.55)} premium, and the cash goes straight to ${owner.name}.`}</p>
+    <button class="gold wide" id="buyBtn" style="margin-top:8px"></button>
+    <p class="hint" id="buyWhy"></p>`;
+}
+
+function wireControls(brand, market, mine) {
+  if (mine) {
+    for (const button of el('deskControls').querySelectorAll('[data-act]')) {
+      button.addEventListener('click', () => {
+        runAction(game, 0, button.dataset.act, Number(button.dataset.target));
+      });
+    }
+    const price = el('pRange');
+    price.addEventListener('input', () => setPrice(game, 0, selected, Number(price.value) / 100));
+    const ads = el('aRange');
+    ads.addEventListener('input', () => setMarketing(game, 0, selected, Number(ads.value)));
+    el('sellBtn').addEventListener('click', () => { divest(game, 0, selected); renderDesk(); });
+  } else {
+    el('buyBtn').addEventListener('click', () => { if (acquire(game, 0, selected).ok) renderDesk(); });
+  }
+}
+
+/** Live numbers and button states inside the desk. */
 function paintDesk() {
   if (selected === null || !el('dShare')) return;
   const b = game.brands[selected];
-  if (b.owner !== deskOwner) { renderDesk(); return; } // It changed hands.
+  if (deskSignature !== `${selected}:${b.owner}`) { renderDesk(); return; }
+
   el('dShare').textContent = pct(b.share);
   el('dRev').textContent = money(b.revenue) + '/s';
   el('dProfit').textContent = (b.profit >= 0 ? '+' : '') + money(b.profit) + '/s';
   el('dProfit').style.color = b.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
-  el('dEq').textContent = b.equity.toFixed(0) + ' / 100';
+  el('dEq').textContent = `${b.equity.toFixed(0)} / ${MAX_EQUITY}`;
 
-  // Both of these move with the market, so they cannot be baked in at render.
+  for (const button of el('deskControls').querySelectorAll('[data-act]')) {
+    const key = button.dataset.act;
+    const check = canRunAction(game, 0, key, Number(button.dataset.target));
+    const cost = button.querySelector('.cost');
+    button.disabled = !check.ok;
+    if (check.reason === 'on cooldown') {
+      cost.textContent = `${Math.ceil(check.ready - game.time)}s`;
+    } else {
+      cost.textContent = money(ACTIONS[key].cost);
+    }
+  }
+
+  const price = el('pRange');
+  if (price && document.activeElement !== price) {
+    price.value = b.price * 100;
+    el('pVal').textContent = '$' + b.price.toFixed(2);
+  } else if (price) {
+    el('pVal').textContent = '$' + (Number(price.value) / 100).toFixed(2);
+  }
+  const ads = el('aRange');
+  if (ads && document.activeElement !== ads) ads.value = b.marketing;
+  if (ads) el('aVal').textContent = money(b.marketing) + '/s';
+
   const sell = el('sellBtn');
   if (sell) sell.textContent = `Divest for ${money(brandValue(game, selected) * 0.85)}`;
+
   const buy = el('buyBtn');
   if (buy) {
     const check = canAcquire(game, 0, selected);
-    const price = acquisitionPrice(game, 0, selected);
+    const cost = acquisitionPrice(game, 0, selected);
+    el('buyPrice').textContent = money(cost);
     buy.disabled = !check.ok;
-    buy.textContent = check.ok ? `Acquire for ${money(price)}` : `Can't buy — ${check.reason}`;
-    el('buyPrice').textContent = money(price);
+    buy.textContent = check.ok ? `Acquire for ${money(cost)}` : `Can't buy — ${check.reason}`;
+    const borrowed = cost - game.firms[0].cash;
+    el('buyWhy').textContent = check.ok && borrowed > 0
+      ? `This borrows ${money(borrowed)} against your portfolio — interest starts immediately.`
+      : whyBlocked(check.reason, b, cost);
   }
+}
+
+function whyBlocked(reason, brand, cost) {
+  if (reason === 'markets still opening') return `Markets open at ${OPENING_GRACE}s.`;
+  if (reason === 'still integrating') return 'It just changed hands — give it a moment.';
+  if (reason === 'not enough capital') {
+    return `You can raise ${money(buyingPower(game, 0))}: cash plus ${money(Math.max(0, creditLimit(game, 0) - game.firms[0].debt))} of credit.`;
+  }
+  if (reason === 'owner is not vulnerable') {
+    const owner = brand.owner === null ? null : game.firms[brand.owner];
+    return `${owner ? owner.name : 'The owner'} is healthy. Starve this brand below 15% of its market, or take the category yourself, then come back.`;
+  }
+  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -539,14 +647,15 @@ function paintHud() {
   const you = game.firms[0];
   const profit = firmProfit(game, 0);
   el('mCash').textContent = money(you.cash);
+  // Running on fumes is the thing players miss until they are being liquidated.
+  el('mCash').style.color = you.cash < 60 && profit < 0 ? 'var(--rose)' : '';
   el('mProfit').textContent = (profit >= 0 ? '+' : '') + money(profit) + '/s';
   el('mProfit').style.color = profit >= 0 ? 'var(--mint)' : 'var(--rose)';
+  el('mShare').textContent = pct(economyShare(game, 0));
   el('mDebt').textContent = money(you.debt);
   el('mWorth').textContent = money(netWorth(game, 0));
-  el('mShare').textContent = pct(economyShare(game, 0));
-  el('mPressure').textContent = '×' + costPressure(game).toFixed(2);
+  el('mBrands').textContent = ownedBrands(game, 0).length;
 
-  // One stacked bar for the whole economy, with the 50% win line marked.
   const rows = standings(game);
   let offset = 0;
   el('goalTrack').innerHTML = rows.map((r) => {
@@ -562,7 +671,7 @@ function paintHud() {
       <td>${money(r.netWorth)}</td>
     </tr>`).join('');
 
-  el('ticker').innerHTML = game.log.slice(0, 12)
+  el('ticker').innerHTML = game.log.slice(0, 10)
     .map((e) => `<div><span class="mono" style="color:${e.color}">${e.time.toFixed(0)}s</span> ${e.text}</div>`)
     .join('') || '<div>Quiet so far.</div>';
 }
@@ -570,13 +679,14 @@ function paintHud() {
 function finish() {
   playing = false;
   el('playBtn').textContent = 'Play';
+  closeSheet();
   const won = game.winner === 0;
   el('ovTitle').textContent = won ? 'Monopoly.'
     : game.outcome === 'bought-out' ? 'Bought out.' : 'Outmaneuvered.';
   el('ovTitle').style.color = won ? 'var(--mint)' : 'var(--gold)';
   const winner = game.winner === null ? null : game.firms[game.winner];
   el('ovText').textContent = won
-    ? `You control ${pct(economyShare(game, 0))} of all revenue across ${game.markets.length} markets. Net worth ${money(netWorth(game, 0))}.`
+    ? `You control ${pct(economyShare(game, 0))} of all revenue across ${game.markets.length} markets, worth ${money(netWorth(game, 0))}.`
     : winner
       ? `${winner.name} took ${pct(economyShare(game, winner.id))} of the economy. You finished on ${pct(economyShare(game, 0))}.`
       : 'Every conglomerate collapsed. The independents inherit the economy.';
@@ -587,12 +697,13 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.2);
   last = now;
   if (playing && !game.over) {
-    tick(game, dt * speed);
+    const before = game.brands.length;
+    tick(game, dt * SPEEDS[speedIndex]);
+    if (game.brands.length !== before) buildBoard(); // A rival launched something.
     if (game.over) finish();
   }
   paintBoard();
   paintDesk();
-  // The HUD rebuilds markup, so it runs on a slower clock than the board.
   if (now - lastHud > 200) { paintHud(); lastHud = now; }
   requestAnimationFrame(loop);
 }
@@ -605,7 +716,9 @@ function newGame() {
   el('playBtn').textContent = 'Pause';
   el('overlay').classList.remove('show');
   buildBoard();
+  deskSignature = '';
   renderDesk();
+  closeSheet();
 }
 
 el('playBtn').addEventListener('click', () => {
@@ -613,14 +726,16 @@ el('playBtn').addEventListener('click', () => {
   playing = !playing;
   el('playBtn').textContent = playing ? 'Pause' : 'Play';
 });
+el('speedBtn').addEventListener('click', () => {
+  speedIndex = (speedIndex + 1) % SPEEDS.length;
+  el('speedBtn').textContent = SPEEDS[speedIndex] + '×';
+});
 el('newBtn').addEventListener('click', newGame);
 el('ovBtn').addEventListener('click', newGame);
-el('speed').addEventListener('input', (e) => {
-  speed = Number(e.target.value);
-  el('speedVal').textContent = speed + '×';
-});
+el('sheetClose').addEventListener('click', closeSheet);
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); el('playBtn').click(); }
+  if (e.code === 'Escape') closeSheet();
 });
 
 newGame();

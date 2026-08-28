@@ -12,7 +12,11 @@ import {
   HOSTILE_PREMIUM, INDEPENDENT_PREMIUM, VALUE_FLOOR, CREDIT_RATIO,
   BRAND_OVERHEAD, EQUITY_DECAY, MARKET_TEMPLATES, SEED_BRANDS, costPressure,
   INFLATION_PERIOD, MAX_INFLATION,
-  OPENING_GRACE, NEGLECT_SHARE, CATEGORY_EDGE, INTEGRATION_LOCK,
+  OPENING_GRACE, NEGLECT_SHARE, CATEGORY_EDGE, INTEGRATION_LOCK, SHELTERED_SIZE,
+  scaleFactor, OVERHEAD_REFERENCE_DEMAND, launchBrand, canLaunch, launchCost,
+  runAction, canRunAction, effectivePrice, launchMomentum, ACTIONS, stableSize,
+  CATEGORY_SYNERGY,
+  LAUNCH_EQUITY, LAUNCH_WINDOW, MAX_BRANDS_PER_MARKET, SOLO_PENALTY,
 } from '../src/monopolis.js';
 
 const half = () => 0.5;
@@ -97,6 +101,147 @@ test('a freshly acquired brand cannot be flipped again immediately', () => {
   assert.equal(canAcquire(game, 1, target.id).ok, true, '...but only once integration ends');
 });
 
+test('a startup is sheltered from category-edge raids', () => {
+  const game = openMarkets(createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) }));
+  const market = game.markets[0];
+  const brands = brandsIn(game, market);
+  for (const b of brands) { b.owner = 0; b.price = 1; b.equity = 50; }
+  const theirs = brands[brands.length - 1];
+  theirs.owner = 1;
+  computeShares(game);
+
+  assert.ok(ownedBrands(game, 1).length <= SHELTERED_SIZE);
+  assert.equal(isVulnerable(game, theirs.id, 0), false, 'small firms are not raidable this way');
+});
+
+test('launching founds a brand: cheap, unknown, and fast-growing', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const market = game.markets[0];
+  const before = market.brandIds.length;
+  const cost = launchCost(game, market.id);
+  game.firms[0].cash = cost + 50;
+
+  const result = launchBrand(game, 0, market.id);
+  assert.equal(result.ok, true);
+  const brand = result.brand;
+  assert.equal(brand.owner, 0);
+  assert.equal(brand.equity, LAUNCH_EQUITY);
+  assert.equal(market.brandIds.length, before + 1);
+  assert.ok(market.brandIds.includes(brand.id));
+  assert.ok(Math.abs(game.firms[0].cash - 50) < 1e-6);
+  assert.ok(brand.share > 0 && brand.share < 0.2, 'it starts small');
+
+  // Young brands convert marketing into equity faster, then settle down.
+  assert.ok(launchMomentum(game, brand) > 1);
+  game.time += LAUNCH_WINDOW;
+  assert.equal(launchMomentum(game, brand), 1);
+});
+
+test('launching is gated by cost, cooldown, names and market size', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const market = game.markets[0];
+  game.firms[0].cash = 0;
+  game.firms[0].debt = creditLimit(game, 0);
+  assert.equal(canLaunch(game, 0, market.id).reason, 'not enough capital');
+
+  game.firms[0].cash = 100_000;
+  game.firms[0].debt = 0;
+  launchBrand(game, 0, market.id);
+  assert.equal(canLaunch(game, 0, market.id).reason, 'still setting up');
+
+  game.firms[0].launchReady = 0;
+  while (market.brandIds.length < MAX_BRANDS_PER_MARKET && market.reserve.length) {
+    game.firms[0].launchReady = 0;
+    launchBrand(game, 0, market.id);
+  }
+  const blocked = canLaunch(game, 0, market.id);
+  assert.equal(blocked.ok, false);
+  assert.ok(['market is full', 'no names left'].includes(blocked.reason));
+});
+
+test('an ad blitz buys equity outright, once per cooldown', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const brand = ownedBrands(game, 0)[0];
+  brand.equity = 40;
+  game.firms[0].cash = 1000;
+
+  assert.equal(runAction(game, 0, 'blitz', brand.id).ok, true);
+  assert.equal(brand.equity, 40 + ACTIONS.blitz.equity);
+  assert.ok(Math.abs(game.firms[0].cash - (1000 - ACTIONS.blitz.cost)) < 1e-9);
+
+  assert.equal(canRunAction(game, 0, 'blitz', brand.id).reason, 'on cooldown');
+  game.time += ACTIONS.blitz.cooldown;
+  assert.equal(canRunAction(game, 0, 'blitz', brand.id).ok, true);
+});
+
+test('a promotion discounts the price customers see, then expires', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const brand = ownedBrands(game, 0)[0];
+  brand.price = 1.2;
+  game.firms[0].cash = 1000;
+  computeShares(game);
+  const before = brand.share;
+
+  runAction(game, 0, 'promo', brand.id);
+  assert.ok(Math.abs(effectivePrice(game, brand) - 1.2 * ACTIONS.promo.discount) < 1e-9);
+  assert.ok(brand.share > before, 'a discount should win share');
+  assert.equal(brand.price, 1.2, 'the list price is untouched');
+
+  game.time += ACTIONS.promo.duration;
+  computeShares(game);
+  assert.equal(effectivePrice(game, brand), 1.2);
+});
+
+test('a category push spikes demand for everyone in the market', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const market = game.markets[0];
+  game.firms[0].cash = 1000;
+  const before = marketDemand(game, market);
+  assert.equal(runAction(game, 0, 'push', market.id).ok, true);
+  assert.ok(marketDemand(game, market) > before);
+});
+
+test('one-tap plays refuse other firms\' brands and empty treasuries', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const theirs = game.brands.find((b) => b.owner === 1);
+  game.firms[0].cash = 1000;
+  assert.equal(canRunAction(game, 0, 'blitz', theirs.id).reason, 'not your brand');
+
+  const mine = ownedBrands(game, 0)[0];
+  game.firms[0].cash = 0;
+  game.firms[0].debt = creditLimit(game, 0);
+  assert.equal(canRunAction(game, 0, 'blitz', mine.id).reason, 'not enough capital');
+});
+
+test('brands sharing a market share their overhead', () => {
+  const game = createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const market = game.markets[0];
+  const [first, second] = brandsIn(game, market);
+  for (const b of game.brands) b.owner = b.id === first.id ? 0 : null;
+  computeShares(game);
+  const alone = first.profit;
+
+  second.owner = 0;
+  computeShares(game);
+  assert.equal(stableSize(game, 0, market.id), 2);
+  // Same brand, same price, same share — but a cheaper back office.
+  const overheadAlone = BRAND_OVERHEAD * costPressure(game) * scaleFactor(game, 0)
+    * (market.baseDemand / OVERHEAD_REFERENCE_DEMAND);
+  assert.ok(overheadAlone * Math.pow(2, -CATEGORY_SYNERGY) < overheadAlone);
+  assert.ok(first.profit > alone - overheadAlone, 'consolidating must not cost more than it earns');
+});
+
+test('scale cuts overhead for big portfolios and penalises solo firms', () => {
+  const game = createGame({ rivals: 1, markets: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  for (const b of ownedBrands(game, 0).slice(1)) b.owner = null;
+  assert.equal(scaleFactor(game, 0), SOLO_PENALTY);
+
+  for (const b of game.brands) if (b.owner === null) b.owner = 0;
+  const big = scaleFactor(game, 0);
+  assert.ok(big < SOLO_PENALTY);
+  assert.ok(big >= 0.55);
+});
+
 test('a beaten-down brand is neglected and takeable', () => {
   const game = openMarkets(createGame({ rivals: 1, markets: 3, rng: seq([0.3, 0.8, 0.15]) }));
   const market = game.markets.find((m) => brandsIn(game, m).some((b) => b.owner === 1));
@@ -117,7 +262,12 @@ test('dominating a category lets you force out a smaller owner there', () => {
   for (const b of brands) { b.owner = 0; b.price = 1; b.equity = 50; }
   const theirs = brands[brands.length - 1];
   theirs.owner = 1;
+  // Firm 1 has to be past startup size, or the shelter rule protects it.
+  for (const b of game.brands) {
+    if (b.marketId !== market.id && ownedBrands(game, 1).length <= SHELTERED_SIZE) b.owner = 1;
+  }
   computeShares(game);
+  assert.ok(ownedBrands(game, 1).length > SHELTERED_SIZE);
 
   assert.ok(categoryGrip(game, 0, market.id)
     > categoryGrip(game, 1, market.id) + CATEGORY_EDGE);
@@ -223,16 +373,18 @@ test('profit nets out unit costs, marketing and overhead', () => {
   brand.marketing = 3;
   computeShares(game);
   const market = game.markets[brand.marketId];
-  const expected = brand.units * (brand.price - market.unitCost)
-    - 3 - BRAND_OVERHEAD * costPressure(game);
+  const overhead = BRAND_OVERHEAD * costPressure(game) * scaleFactor(game, 0)
+    * (market.baseDemand / OVERHEAD_REFERENCE_DEMAND)
+    * Math.pow(stableSize(game, 0, market.id), -CATEGORY_SYNERGY);
+  const expected = brand.units * (brand.price - market.unitCost) - 3 - overhead;
   assert.ok(Math.abs(brand.profit - expected) < 1e-9);
 });
 
 test('overhead inflates over the game, then stops at the cap', () => {
   const game = tinyGame();
   assert.equal(costPressure(game), 1);
-  game.time = INFLATION_PERIOD;
-  assert.ok(Math.abs(costPressure(game) - 2) < 1e-9);
+  game.time = INFLATION_PERIOD * (MAX_INFLATION - 1) * 0.5;
+  assert.ok(Math.abs(costPressure(game) - (1 + (MAX_INFLATION - 1) * 0.5)) < 1e-9);
   game.time = INFLATION_PERIOD * 100;
   assert.equal(costPressure(game), MAX_INFLATION);
 
@@ -240,7 +392,7 @@ test('overhead inflates over the game, then stops at the cap', () => {
   const brand = ownedBrands(game, 0)[0];
   computeShares(game);
   const early = brand.profit;
-  game.time = INFLATION_PERIOD * 3;
+  game.time = INFLATION_PERIOD * (MAX_INFLATION - 1);
   computeShares(game);
   assert.ok(brand.profit < early, 'the same brand earns less as costs rise');
 });
@@ -507,7 +659,7 @@ test('a full game resolves without NaNs or negative cash', () => {
   const rng = seeded(20260827);
   const game = createGame({ rivals: 3, markets: 6, rng });
   let steps = 0;
-  while (!game.over && steps < 20_000) {
+  while (!game.over && steps < 60_000) {
     tick(game, 0.1, rng);
     steps++;
     for (const firm of game.firms) {
@@ -524,11 +676,12 @@ test('a full game resolves without NaNs or negative cash', () => {
 });
 
 test('every AI-only economy consolidates, across several seeds', () => {
+  // Eight markets is the shipped configuration.
   for (const seed of [1, 7, 99, 2024, 31337]) {
     const rng = seeded(seed);
-    const game = createGame({ rivals: 3, markets: 6, rng });
+    const game = createGame({ rivals: 3, markets: 8, rng });
     let steps = 0;
-    while (!game.over && steps < 20_000) {
+    while (!game.over && steps < 60_000) {
       tick(game, 0.1, rng);
       steps++;
     }

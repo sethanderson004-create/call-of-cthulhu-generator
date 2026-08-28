@@ -27,48 +27,51 @@ file. Every roll happens locally in your browser.
 
 A second, unrelated toy that shares the same house rules (zero dependencies,
 pure tested engine, one HTML file for the UI): a **real-time strategy game
-about building a business empire** — no map, no armies, just markets.
+about building a business empire** — no map, no armies, just markets. It plays
+on a phone.
 
 The economy is eight **markets** (Coffee, Streaming, Airlines, Solar, Fashion,
-Grocery, Semiconductors, Fitness). Each is contested by three or four
-**brands**, owned by you, by three AI conglomerates, or by nobody. Every brand
-sets a **price** and burns cash on **marketing**, and those two numbers decide
-its slice of the market: customers are pulled toward strong brands and pushed
-away by expensive ones — hard in price-sensitive categories like Airlines,
-barely at all in Semiconductors.
+Grocery, Semiconductors, Fitness). Each is contested by **brands** owned by
+you, by three AI conglomerates, or by nobody. Every brand sets a **price** and
+spends on **marketing**, and those two numbers decide its slice: customers are
+pulled toward brands they know and pushed away by expensive ones — hard in
+price-sensitive categories like Airlines, barely at all in Semiconductors.
 
-What you actually play with:
+**Build or buy.** You can *launch* your own brand into any market for a modest
+price. It arrives tiny and unknown, but a young brand converts advertising into
+recognition more than twice as fast for its first minute, so a funded launch can
+outrun an incumbent that stopped paying attention. Or you can *buy* a brand and
+take its whole slice today — independents at a small premium, a rival's at 55%
+over fair value, with the cash going straight into their war chest.
 
-- **Price** — charge more for a fatter margin per unit, or undercut to take
-  share. The trade is sharper in elastic markets.
-- **Marketing** — buys brand equity, which is what really wins customers, and
-  which decays the moment you stop paying for it.
-- **Category campaigns** — grow a whole market's demand. It lifts every brand
-  in the category, so it only pays where you already hold the biggest slice.
-- **Acquisitions** — buy a brand and take its entire slice at once.
-  Independents sell at a small premium; a hostile bid on a rival costs 55% over
-  fair value, and the cash goes straight to the rival's war chest.
-- **Debt** — you can borrow against your portfolio to close a deal, and the
-  interest is a real drag when a price war goes badly.
+**One-tap campaigns**, so a round is playable with a thumb:
 
-The constraint that makes it a game is that **you can only raid the weak**: a
-rival's brand is takeable when it has been starved below 15% of its market,
-when its parent is over-leveraged, or when you already out-hold that parent in
-that category. So you win a category with price and advertising *first*, then
-buy the losers in it. Meanwhile costs inflate all game, so a three-way
-standoff steadily gets more expensive until someone's balance sheet breaks.
+| Play | Cost | Effect |
+| --- | --- | --- |
+| Ad blitz | $55 | Buys customer reach outright, instantly |
+| Promotion | $30 | Discounts the brand for 18 seconds — a share spike, at a thinner margin |
+| Category push | $65 | Lifts demand for *every* brand in the market, so it pays where you lead |
 
-**Win** by taking 50% of all revenue in the economy. **Lose** by being stripped
-of every brand — the AI plays by exactly the same rules, and will come for
-yours the moment your net worth gets thin.
+Sliders for price and marketing budget are still there, tucked behind a
+disclosure for when you want them.
 
-The whole state of the game reads off one screen: a card per market, each with
-a stacked share bar coloured by owner, and every brand's price, equity and
-share underneath it.
+**You can only raid the weak.** A rival's brand is takeable when it has been
+starved below 15% of its market, when its parent is deep in debt, or when you
+already out-hold that parent in that category. Firms with three brands or fewer
+are sheltered entirely, so a new player isn't dismantled before their first
+move. Win a category with price and advertising *first*, then buy the losers.
 
-Open `monopolis.html` (engine: `src/monopolis.js`, tests: `test/monopolis.test.mjs`).
-It loads its engine as an ES module, so serve the folder rather than opening the
-file directly:
+**Scale pays.** Brands you run side by side in one market share their costs, and
+a large portfolio spreads overhead thinner than a small one — so consolidating
+compounds, which is what carries someone to a monopoly rather than a permanent
+four-way standoff.
+
+**Win** by taking 50% of all revenue. **Lose** by being stripped of every brand.
+A typical game runs eight to ten minutes; the speed control goes to 8×.
+
+Open `monopolis.html` (engine: `src/monopolis.js`, tests:
+`test/monopolis.test.mjs`). It loads its engine as an ES module, so serve the
+folder rather than opening the file directly:
 
 ```sh
 python3 -m http.server 8000   # then visit localhost:8000/monopolis.html
