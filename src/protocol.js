@@ -18,7 +18,7 @@ import {
   brandsIn, ownedBrands, categoryGrip, effectivePrice, launchMomentum,
   economyShare, firmProfit, netWorth, buyingPower, creditLimit, marketDemand,
   brandValue, acquisitionPrice, canAcquire, canLaunch, canRunAction, isNeglected,
-  launchCost, standings, activeFirms, winShare,
+  launchCost, standings, activeFirms, winShare, timeLeft,
   setPrice, setMarketing, runAction, launchBrand, acquire, divest,
   ACTIONS, MAX_EQUITY, MIN_PRICE, MAX_PRICE,
 } from './monopolis.js';
@@ -91,6 +91,12 @@ function brandDetail(game, brand, firmId) {
     share: r3(brand.share),
     revenue: r2(brand.revenue),
     profit: r2(brand.profit),
+    // The full line: what came in, and where it went. A player who cannot see
+    // why a brand loses money can only guess at what to change.
+    cogs: r2(brand.units * game.markets[brand.marketId].unitCost),
+    ads: r2(brand.marketing),
+    overhead: r2(brand.revenue - brand.units * game.markets[brand.marketId].unitCost
+      - brand.marketing - brand.profit),
     value: Math.round(brandValue(game, brand.id)),
     launching: brand.born > 0 && launchMomentum(game, brand) > 1.05,
     weak: brand.owner !== null && isNeglected(game, brand.id),
@@ -159,6 +165,7 @@ export function snapshot(game, firmId, view = {}) {
       humans: game.firms.filter((f) => f.human && !f.gone).length,
     },
     goal: r3(winShare(game)),
+    left: timeLeft(game) === null ? null : Math.round(timeLeft(game)),
     over: game.over,
     outcome: game.outcome,
     winner: game.winner === null ? null : game.firms[game.winner]?.name ?? null,

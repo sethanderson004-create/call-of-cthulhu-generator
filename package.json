@@ -1,7 +1,7 @@
 {
   "name": "call-of-cthulhu-generator",
   "version": "1.0.0",
-  "description": "Zero-dependency Call of Cthulhu 7th-edition investigator generator: rolled stats, occupation, and a doom-touched backstory \u2014 all in the browser.",
+  "description": "Zero-dependency Call of Cthulhu 7th-edition investigator generator: rolled stats, occupation, and a doom-touched backstory — all in the browser.",
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",

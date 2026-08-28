@@ -12,7 +12,8 @@ import {
   HOSTILE_PREMIUM, INDEPENDENT_PREMIUM, VALUE_FLOOR, CREDIT_RATIO,
   BRAND_OVERHEAD, EQUITY_DECAY, MARKET_TEMPLATES, SEED_BRANDS, costPressure,
   INFLATION_PERIOD, MAX_INFLATION,
-  OPENING_GRACE, NEGLECT_SHARE, CATEGORY_EDGE, INTEGRATION_LOCK, SHELTERED_SIZE,
+  OPENING_GRACE, NEGLECT_RATIO, CATEGORY_EDGE, INTEGRATION_LOCK, SHELTERED_SIZE,
+  ROUND_SECONDS, timeLeft, activeFirms, addFirm, removeFirm, worldSize, winShare,
   scaleFactor, OVERHEAD_REFERENCE_DEMAND, launchBrand, canLaunch, launchCost,
   runAction, canRunAction, effectivePrice, launchMomentum, ACTIONS, stableSize,
   CATEGORY_SYNERGY,
@@ -99,6 +100,100 @@ test('a freshly acquired brand cannot be flipped again immediately', () => {
 
   game.time += INTEGRATION_LOCK;
   assert.equal(canAcquire(game, 1, target.id).ok, true, '...but only once integration ends');
+});
+
+test('neglect is measured against the market\'s even split, not a flat share', () => {
+  // In a crowded market an even split is small; a flat threshold would make
+  // every brand permanently raidable and brands would ping-pong all round.
+  const game = openMarkets(createGame({ rivals: 1, markets: 4, rng: seq([0.3, 0.8, 0.15, 0.6]) }));
+  const market = game.markets[0];
+  for (const b of brandsIn(game, market)) { b.owner = 1; b.price = 1; b.equity = 50; }
+  computeShares(game);
+  const even = 1 / market.brandIds.length;
+  for (const b of brandsIn(game, market)) {
+    assert.ok(Math.abs(b.share - even) < 0.02, 'an even market');
+    assert.equal(isNeglected(game, b.id), false, 'holding your fair share is not neglect');
+  }
+  const victim = brandsIn(game, market)[0];
+  victim.equity = 2;
+  victim.price = MAX_PRICE;
+  computeShares(game);
+  assert.ok(victim.share < NEGLECT_RATIO * even);
+  assert.equal(isNeglected(game, victim.id), true);
+});
+
+test('a starting brand earns money instead of quietly bleeding', () => {
+  // A new player's opening position must be profitable at rest: if the
+  // default position loses money, every game begins by going backwards.
+  const game = createGame({ players: 8, rng: seq([0.3, 0.8, 0.15, 0.6, 0.45]) });
+  computeShares(game);
+  assert.ok(firmProfit(game, 0) > 0, `a new firm should earn, got ${firmProfit(game, 0)}`);
+  for (const brand of ownedBrands(game, 0)) {
+    assert.ok(brand.profit > 0, `${brand.name} should be profitable, got ${brand.profit}`);
+  }
+});
+
+test('every sector supports a profitable brand at rest', () => {
+  const game = createGame({ players: 8, markets: 8, rng: seq([0.5, 0.2, 0.7, 0.4]) });
+  for (const market of game.markets) {
+    for (const b of brandsIn(game, market)) b.owner = null;
+    brandsIn(game, market)[0].owner = 0;
+  }
+  computeShares(game);
+  for (const market of game.markets) {
+    const brand = brandsIn(game, market).find((b) => b.owner === 0);
+    assert.ok(brand.profit > 0, `${market.name} should be a runnable business, got ${brand.profit}`);
+  }
+});
+
+test('a round ends on the clock when nobody has monopolised', () => {
+  const game = createGame({ players: 6, roundSeconds: 30, rng: seq([0.3, 0.8, 0.15]) });
+  assert.equal(timeLeft(game), 30);
+  for (let i = 0; i < 320 && !game.over; i++) tick(game, 0.1, seq([0.4, 0.6, 0.2]));
+  assert.equal(game.over, true);
+  assert.equal(game.outcome, 'time');
+  assert.equal(timeLeft(game), 0);
+  assert.ok(game.winner !== null, 'the leaderboard decides it');
+  assert.equal(game.winner, standings(game)[0].id);
+});
+
+test('a wiped-out firm with cash gets back into the game', () => {
+  const game = openMarkets(createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) }));
+  const firm = game.firms[1];
+  for (const brand of ownedBrands(game, firm.id)) brand.owner = null;
+  computeShares(game);
+  firm.cash = 2000;
+  firm.cooldown = 0;
+  assert.equal(ownedBrands(game, firm.id).length, 0);
+
+  runAi(game, firm, 0.1, seq([0.4, 0.6]));
+  assert.ok(ownedBrands(game, firm.id).length > 0, 'it should re-enter rather than sit on its cash');
+});
+
+test('joining and leaving a world in progress', () => {
+  const game = createGame({ players: 5, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const before = activeFirms(game).length;
+  const joiner = addFirm(game, { name: 'Latecomer', rng: seq([0.2, 0.9]) });
+  computeShares(game);
+  assert.equal(activeFirms(game).length, before + 1);
+  assert.ok(ownedBrands(game, joiner.id).length > 0, 'a joiner always gets somewhere to stand');
+
+  const held = ownedBrands(game, joiner.id).map((b) => b.id);
+  assert.equal(removeFirm(game, joiner.id), true);
+  for (const id of held) assert.equal(game.brands[id].owner, null, 'their brands return to the market');
+  assert.equal(removeFirm(game, joiner.id), false, 'leaving twice is a no-op');
+});
+
+test('the world and the win bar scale with the lobby', () => {
+  assert.ok(worldSize(100).markets > worldSize(4).markets);
+  const small = createGame({ players: 4, rng: seq([0.4]) });
+  const big = createGame({ players: 100, rng: seq([0.4]) });
+  assert.ok(big.markets.length > small.markets.length);
+  assert.ok(big.brands.length > small.brands.length);
+  assert.equal(winShare(small), 0.5);
+  assert.ok(winShare(big) < winShare(small));
+  assert.ok(winShare(big) >= 0.2);
+  for (const firm of big.firms) assert.ok(ownedBrands(big, firm.id).length > 0, 'everyone is seated');
 });
 
 test('a startup is sheltered from category-edge raids', () => {
@@ -250,7 +345,8 @@ test('a beaten-down brand is neglected and takeable', () => {
   victim.price = MAX_PRICE;
   victim.equity = 2;
   computeShares(game);
-  assert.ok(victim.share < NEGLECT_SHARE);
+  const even = 1 / market.brandIds.length;
+  assert.ok(victim.share < NEGLECT_RATIO * even);
   assert.equal(isNeglected(game, victim.id), true);
   assert.equal(isVulnerable(game, victim.id), true);
 });

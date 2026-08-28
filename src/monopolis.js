@@ -22,6 +22,14 @@
 // Tuning — every dial the simulation turns, in one place.
 // ---------------------------------------------------------------------------
 
+/**
+ * How long a round runs before the leaderboard decides it. A monopoly ends a
+ * round early; otherwise the clock does, which keeps a session to a known
+ * length however many firms are trading — a hundred-firm economy would
+ * otherwise take an hour to consolidate.
+ */
+export const ROUND_SECONDS = 600;
+
 /** Revenue share of the whole economy that counts as a monopoly (a win). */
 export const MONOPOLY_SHARE = 0.5;
 
@@ -41,8 +49,13 @@ export const MAX_EQUITY = 100;
 /** Equity gained per $1/s of brand marketing, before diminishing returns. */
 export const EQUITY_GAIN = 0.42;
 
-/** Fraction of equity lost per second when nobody is spending. Brands rot. */
-export const EQUITY_DECAY = 0.022;
+/**
+ * Fraction of equity lost per second when nobody is spending. Brands rot —
+ * but slowly enough that a modest, affordable ad budget holds a position.
+ * Set it higher and every brand needs more advertising than it earns, which
+ * makes the whole economy a treadmill nobody can run profitably.
+ */
+export const EQUITY_DECAY = 0.015;
 
 /** Category buzz gained per $1/s of category marketing. */
 export const BUZZ_GAIN = 0.05;
@@ -60,7 +73,7 @@ export const CATEGORY_ELASTICITY = 0.6;
  * costs more to operate than a boutique solar outfit — so a small category is
  * a viable niche to hold rather than a trap that quietly bleeds you.
  */
-export const BRAND_OVERHEAD = 0.45;
+export const BRAND_OVERHEAD = 0.32;
 export const OVERHEAD_REFERENCE_DEMAND = 15;
 
 /**
@@ -88,7 +101,7 @@ export const CATEGORY_SYNERGY = 0.5;
 
 export const SCALE_DISCOUNT = 0.05;
 export const MIN_SCALE_FACTOR = 0.6;
-export const SOLO_PENALTY = 1.15;
+export const SOLO_PENALTY = 1;
 
 /**
  * A firm this small is a startup, not a target: its brands can only be taken
@@ -129,12 +142,14 @@ export const INTEREST_RATE = 0.006;
 export const DISTRESS_RATIO = 0.4;
 
 /**
- * A brand starved below this share of its own market is "neglected" and can
- * be bought out from under a healthy owner. It is the lever that makes
- * raiding something you earn: beat a brand down on price and marketing first,
- * then take it.
+ * A brand is "neglected" — and so can be bought out from under a healthy
+ * owner — when it holds less than this fraction of an even split of its
+ * market. Measuring against the even split rather than a fixed percentage
+ * matters as soon as markets get crowded: a flat 15% means every brand in a
+ * six-way market is permanently raidable, and brands ping-pong between owners
+ * all round instead of being fought over.
  */
-export const NEGLECT_SHARE = 0.15;
+export const NEGLECT_RATIO = 0.8;
 
 /** No acquisitions in the opening seconds — everyone gets to set up first. */
 export const OPENING_GRACE = 45;
@@ -197,42 +212,42 @@ export const RIVAL_NAMES = [
  */
 export const MARKET_TEMPLATES = [
   {
-    key: 'coffee', name: 'Coffee', demand: 22, elasticity: 1.5, adPower: 1.25, cost: 0.42,
+    key: 'coffee', name: 'Coffee', demand: 22, elasticity: 1.5, adPower: 1.25, cost: 0.38,
     brands: ['Ashgrove Roasters', 'Bean & Bell', 'Cardinal Coffee', 'Nocturne Brew'],
     reserve: ['Ember & Oat', 'Hollow Cup', 'Dayrise Coffee'],
   },
   {
-    key: 'streaming', name: 'Streaming', demand: 16, elasticity: 1.1, adPower: 1.45, cost: 0.30,
+    key: 'streaming', name: 'Streaming', demand: 16, elasticity: 1.1, adPower: 1.45, cost: 0.32,
     brands: ['Lumen+', 'Kestrel TV', 'Nightplay', 'Orbit Originals'],
     reserve: ['Halcyon Play', 'Vireo', 'Second Reel'],
   },
   {
-    key: 'airlines', name: 'Airlines', demand: 12, elasticity: 2.4, adPower: 0.75, cost: 0.68,
+    key: 'airlines', name: 'Airlines', demand: 12, elasticity: 2.4, adPower: 0.75, cost: 0.54,
     brands: ['Corvid Air', 'Trellis Airways', 'Skyline Jet'],
     reserve: ['Meridian Air', 'Wing & Wold', 'Pelagic Airways'],
   },
   {
-    key: 'solar', name: 'Solar', demand: 10, elasticity: 1.7, adPower: 0.95, cost: 0.55,
+    key: 'solar', name: 'Solar', demand: 10, elasticity: 1.7, adPower: 0.95, cost: 0.46,
     brands: ['Helio Works', 'Bright Harvest', 'Sunfall Energy'],
     reserve: ['Dawnline Solar', 'Copperfield Power', 'Zenith Array'],
   },
   {
-    key: 'fashion', name: 'Fashion', demand: 18, elasticity: 1.2, adPower: 1.6, cost: 0.38,
+    key: 'fashion', name: 'Fashion', demand: 18, elasticity: 1.2, adPower: 1.6, cost: 0.36,
     brands: ['Marlowe & Vane', 'Petra Label', 'Sable Row', 'Ivy Grade'],
     reserve: ['Vellum Atelier', 'Cross & Quiet', 'Norwood Studio'],
   },
   {
-    key: 'grocery', name: 'Grocery', demand: 28, elasticity: 2.1, adPower: 0.7, cost: 0.74,
+    key: 'grocery', name: 'Grocery', demand: 28, elasticity: 2.1, adPower: 0.7, cost: 0.56,
     brands: ['Fairmount Foods', 'Larkin Market', 'Provisions Co.'],
     reserve: ['Bramble Grocers', 'Ordinary Goods', 'Hearth Pantry'],
   },
   {
-    key: 'chips', name: 'Semiconductors', demand: 9, elasticity: 0.9, adPower: 0.6, cost: 0.46,
+    key: 'chips', name: 'Semiconductors', demand: 9, elasticity: 0.9, adPower: 0.6, cost: 0.42,
     brands: ['Silica Dynamics', 'Nexon Micro', 'Quartzline'],
     reserve: ['Ferrite Labs', 'Halide Systems', 'Kelvin Micro'],
   },
   {
-    key: 'fitness', name: 'Fitness', demand: 14, elasticity: 1.8, adPower: 1.35, cost: 0.44,
+    key: 'fitness', name: 'Fitness', demand: 14, elasticity: 1.8, adPower: 1.35, cost: 0.40,
     brands: ['Ironhaus', 'Pulse Studios', 'Ridgeline Gyms'],
     reserve: ['Rowhouse', 'Granite Athletic', 'Third Mile'],
   },
@@ -336,6 +351,7 @@ export function createGame({
   players,
   markets,
   bots = true,
+  roundSeconds = ROUND_SECONDS,
   rng = Math.random,
 } = {}) {
   // `players` is the io-style entry point (how many seats the world is built
@@ -353,6 +369,7 @@ export function createGame({
     winner: null,
     outcome: null,
     seats,
+    roundLength: roundSeconds,
   };
 
   for (let i = 0; i < marketCount; i++) {
@@ -407,7 +424,7 @@ export function addBrand(game, marketId, { name, owner = null, equity, price, rn
     owner,
     price: price ?? clamp(jitter(1, 0.12, rng), MIN_PRICE, MAX_PRICE),
     equity: equity ?? jitter(38, 12, rng),
-    marketing: 2,
+    marketing: Math.max(0.8, market.baseDemand * 0.06),
     share: 0,
     born: game.time,
     promoUntil: 0,
@@ -484,6 +501,12 @@ export function removeFirm(game, firmId) {
   computeShares(game);
   logEvent(game, `${firm.name} left the market.`, firm.color);
   return true;
+}
+
+/** Seconds left in the round, or null when a round is untimed. */
+export function timeLeft(game) {
+  if (!game.roundLength) return null;
+  return Math.max(0, game.roundLength - game.time);
 }
 
 /** Firms still in the running. */
@@ -650,9 +673,11 @@ export function inDistress(game, firmId) {
   return netWorth(game, firmId) < portfolioValue(game, firmId) * DISTRESS_RATIO;
 }
 
-/** A brand nobody is defending — starved of share in its own market. */
+/** A brand nobody is defending — starved well below its market's even split. */
 export function isNeglected(game, brandId) {
-  return game.brands[brandId].share < NEGLECT_SHARE;
+  const brand = game.brands[brandId];
+  const even = 1 / Math.max(1, game.markets[brand.marketId].brandIds.length);
+  return brand.share < NEGLECT_RATIO * even;
 }
 
 /** A firm's combined share of one market — its grip on the category. */
@@ -1011,7 +1036,30 @@ export function shoppingList(game, firm, mine, rng = Math.random, sample = AI_SC
  */
 export function runAi(game, firm, dt, rng = Math.random) {
   const mine = ownedBrands(game, firm.id);
-  if (mine.length === 0) return;
+
+  // Wiped out but still solvent: found something and start again. Without
+  // this a firm that loses its last brand sits on its cash for the rest of
+  // the round, which is neither a strategy nor an ending.
+  if (mine.length === 0) {
+    firm.cooldown -= dt;
+    if (firm.cooldown > 0) return;
+    const opening = game.markets
+      .map((m) => ({ market: m, check: canLaunch(game, firm.id, m.id) }))
+      .filter(({ check }) => check.ok)
+      .sort((a, b) => a.check.cost - b.check.cost)[0];
+    if (opening) {
+      launchBrand(game, firm.id, opening.market.id);
+      firm.cooldown = 5 + rng() * 5;
+    } else {
+      const bargain = shoppingList(game, firm, [], rng)
+        .map((brand) => ({ brand, check: canAcquire(game, firm.id, brand.id) }))
+        .filter(({ check }) => check.ok)
+        .sort((a, b) => a.check.price - b.check.price)[0];
+      if (bargain) acquire(game, firm.id, bargain.brand.id);
+      firm.cooldown = 4 + rng() * 4;
+    }
+    return;
+  }
 
   // Retrenchment. A firm with no cash and no profit stops competing for share
   // and starts protecting its margin: ads down to a trickle, prices up. It is
@@ -1116,7 +1164,7 @@ export function runAi(game, firm, dt, rng = Math.random) {
     if (brand.equity < 14 || brand.share < 0.08) continue;
     // Integration strain: every brand already on the books makes the next
     // deal harder to justify, so a leader's buying spree slows as it grows.
-    const restraint = Math.max(0.12, 0.45 - 0.025 * mine.length);
+    const restraint = Math.max(0.18, 0.6 - 0.025 * mine.length);
     if (check.price > buyingPower(game, firm.id) * restraint) continue;
     // Strongly prefer consolidating a category this firm already holds.
     const familiar = 1 + 2.5 * categoryGrip(game, firm.id, brand.marketId);
@@ -1129,7 +1177,7 @@ export function runAi(game, firm, dt, rng = Math.random) {
   }
   if (best !== null) {
     acquire(game, firm.id, best);
-    firm.cooldown = 26 + rng() * 24; // Deals take time to digest.
+    firm.cooldown = 14 + rng() * 16; // Deals take time to digest.
   } else {
     firm.cooldown = 5 + rng() * 5;
   }
@@ -1167,6 +1215,13 @@ export function resolveOutcomes(game) {
     game.over = true;
     game.winner = alive.length ? alive[0].id : null;
     game.outcome = 'last-standing';
+  }
+  // Time called: whoever holds the most of the economy takes the round.
+  if (!game.over && game.roundLength && game.time >= game.roundLength) {
+    const leader = standings(game).find((row) => !row.boughtOut);
+    game.over = true;
+    game.winner = leader ? leader.id : null;
+    game.outcome = 'time';
   }
   return game;
 }

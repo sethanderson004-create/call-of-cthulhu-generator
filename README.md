@@ -64,15 +64,24 @@ are sheltered, so a new player isn't dismantled before their first move.
 large portfolio spreads overhead thinner — consolidating compounds, which is
 what carries someone to a monopoly rather than a permanent standoff.
 
-**Win** by taking a share of all revenue: half of it in a four-firm game, down
-to a fifth in a hundred-firm world, since half of everything is not on the
-table when ninety-nine other people are trading.
+**Win** by taking a share of all revenue — half of it in a four-firm game, down
+to a fifth in a hundred-firm world — or by leading the leaderboard when the
+ten-minute round clock runs out. In a crowded economy you are really playing
+for rank: nobody monopolises a hundred-firm world in ten minutes.
+
+**The money works.** A starting position earns about **+$2/s** doing nothing,
+and every brand's full profit and loss — revenue, cost of goods, marketing,
+overhead — is shown in the brand desk, so when a brand does lose money you can
+see which line is doing it. Campaigns and takeovers are meant to be a real
+sacrifice of that income, not a slide into permanent losses.
 
 ### Playing solo
 
-`monopolis.html` runs the whole simulation in the tab — pick a world of 4 to
-100 firms in the lobby. It loads its engine as ES modules, so serve the folder
-rather than opening the file directly:
+`monopolis.html` opens straight into a game — the whole simulation runs in the
+tab, no server involved. **Rooms** picks a different world size (4 firms up to
+100) or joins a live server if one is running at that address. It loads its
+engine as ES modules, so serve the folder rather than opening the file
+directly:
 
 ```sh
 npm start                    # then visit localhost:8000/monopolis.html

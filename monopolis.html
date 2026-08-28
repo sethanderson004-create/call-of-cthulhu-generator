@@ -189,6 +189,10 @@
     align-items: center;
   }
   .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 3px 0; }
+  .pnl { margin: 8px 0; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 9px; }
+  .pnl .row { padding: 2px 0; }
+  .pnl .row.sub { color: var(--ink-faint); font-size: 12px; padding-left: 10px; }
+  .pnl .row.total { border-top: 1px solid var(--border); margin-top: 5px; padding-top: 5px; font-weight: 600; }
   .row b { font-weight: 600; }
   .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 11px 0 4px; }
   .actions button { padding: 6px 4px; min-height: 52px; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; }
@@ -381,6 +385,7 @@
       <div class="metric"><small>Profit</small><b id="mProfit">—</b></div>
       <div class="metric"><small>Share</small><b id="mShare">—</b></div>
       <div class="metric"><small>Rank</small><b id="mRank">—</b></div>
+      <div class="metric"><small>Time left</small><b id="mClock">—</b></div>
       <div class="metric wide"><small>Net worth</small><b id="mWorth">—</b></div>
       <div class="metric wide"><small>Brands</small><b id="mBrands">—</b></div>
     </div>
@@ -445,8 +450,9 @@
 
 <div id="lobby"><div class="box">
   <h2>Monopolis</h2>
-  <p class="hint">A real-time economy where you win markets, not ground. Play alone against bots,
-    or join a live room of up to a hundred firms.</p>
+  <p class="hint">A real-time economy where you win markets, not ground. Everything runs in this
+    tab — no server needed. Bigger worlds are wilder: in a hundred-firm economy you are playing
+    for rank on the leaderboard, not for a monopoly.</p>
   <div class="lobbyrow">
     <label class="lever">Your name<input id="playerName" type="text" maxlength="28" placeholder="Anonymous" /></label>
   </div>
@@ -455,10 +461,11 @@
   <div class="lobbyrow">
     <label class="lever">Solo world size <span class="val"></span>
       <select id="botCount">
-        <option value="4">4 firms — quick</option>
-        <option value="12" selected>12 firms — busy</option>
-        <option value="40">40 firms — crowded</option>
-        <option value="100">100 firms — full house</option>
+        <option value="4">4 firms — a duel</option>
+        <option value="8" selected>8 firms — recommended</option>
+        <option value="20">20 firms — busy</option>
+        <option value="60">60 firms — crowded</option>
+        <option value="100">100 firms — a whole economy</option>
       </select>
     </label>
   </div>
@@ -479,6 +486,12 @@ const el = (id) => document.getElementById(id);
 const money = (n) => (n < 0 ? '-' : '') + '$' + (Math.abs(n) >= 1000
   ? (Math.abs(n) / 1000).toFixed(1) + 'k' : Math.abs(n).toFixed(0));
 const pct = (n) => (n * 100).toFixed(n < 0.1 ? 1 : 0) + '%';
+/** Per-second figures are small; whole dollars would round them into fog. */
+const rate = (n) => {
+  const sign = n < 0 ? '-' : '';
+  const size = Math.abs(n);
+  return `${sign}$${size >= 100 ? size.toFixed(0) : size.toFixed(2)}/s`;
+};
 const isPhone = () => window.matchMedia('(max-width: 860px)').matches;
 const escape = (s) => String(s).replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -618,17 +631,24 @@ async function detectServer() {
 }
 
 async function showLobby() {
+  try {
+    const saved = localStorage.getItem('monopolis.players');
+    if (saved) el('botCount').value = saved;
+  } catch { /* private mode */ }
+  el('lobbyServer').textContent = 'Looking for a server…';
+  el('joinBtn').disabled = true;
+  el('lobby').classList.add('show');
   const server = await detectServer();
   el('lobbyServer').innerHTML = server
     ? `<b>${server.humans}</b> playing · ${server.active} firms · ${server.markets} markets · round ${server.round}`
     : 'No server found at this address. Single player runs entirely in this tab.';
   el('joinBtn').disabled = !server;
-  el('joinBtn').textContent = server ? `Join — ${server.seats} seats` : 'No server available';
-  el('lobby').classList.add('show');
+  el('joinBtn').textContent = server ? `Join the live room — ${server.humans} playing` : 'No live room here';
 }
 
 function startLocal() {
-  const players = Number(el('botCount').value);
+  const players = Number(el('botCount').value || 8);
+  try { localStorage.setItem('monopolis.players', String(players)); } catch { /* private mode */ }
   world = new LocalWorld({ players, speed: SPEEDS[speedIndex] });
   info = world.info();
   el('lobby').classList.remove('show');
@@ -836,8 +856,13 @@ function renderDesk() {
       <span class="mono">${escape(meta?.name ?? '')}</span></div>
     <div class="row"><span>Owner</span><b data-role="owner"></b></div>
     <div class="row"><span>Share of market</span><b data-role="share"></b></div>
-    <div class="row"><span>Revenue</span><b data-role="revenue"></b></div>
-    <div class="row"><span>Profit</span><b data-role="profit"></b></div>
+    <div class="pnl">
+      <div class="row"><span>Revenue</span><b data-role="revenue"></b></div>
+      <div class="row sub"><span>Cost of goods</span><b data-role="cogs"></b></div>
+      <div class="row sub"><span>Marketing</span><b data-role="ads"></b></div>
+      <div class="row sub"><span>Overhead</span><b data-role="overhead"></b></div>
+      <div class="row total"><span>Profit</span><b data-role="profit"></b></div>
+    </div>
     <div class="row"><span>Customer reach</span><b data-role="reach"></b></div>
     ${brand.mine ? `
       <div class="actions">
@@ -879,9 +904,12 @@ function paintDesk() {
 
   part('owner').textContent = brand.mine ? 'You' : brand.ownerName ?? 'Independent';
   part('share').textContent = pct(brand.share);
-  part('revenue').textContent = money(brand.revenue) + '/s';
+  part('revenue').textContent = '+' + rate(brand.revenue);
+  part('cogs').textContent = '−' + rate(brand.cogs);
+  part('ads').textContent = '−' + rate(brand.ads);
+  part('overhead').textContent = '−' + rate(brand.overhead);
   const profit = part('profit');
-  profit.textContent = (brand.profit >= 0 ? '+' : '') + money(brand.profit) + '/s';
+  profit.textContent = (brand.profit >= 0 ? '+' : '') + rate(brand.profit);
   profit.style.color = brand.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
   part('reach').textContent = `${brand.equity} / ${info.maxEquity}`;
 
@@ -964,12 +992,19 @@ function renderHud() {
   if (!you) return;
   el('mCash').textContent = money(you.cash);
   el('mCash').style.color = you.cash < 60 && you.profit < 0 ? 'var(--rose)' : '';
-  el('mProfit').textContent = (you.profit >= 0 ? '+' : '') + money(you.profit) + '/s';
+  el('mProfit').textContent = (you.profit >= 0 ? '+' : '') + rate(you.profit);
   el('mProfit').style.color = you.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
   el('mShare').textContent = pct(you.share);
   el('mRank').textContent = `#${you.rank}`;
   el('mWorth').textContent = money(you.worth);
   el('mBrands').textContent = you.brands;
+  if (state.left === null) {
+    el('mClock').textContent = '—';
+  } else {
+    const minutes = Math.floor(state.left / 60);
+    el('mClock').textContent = `${minutes}:${String(Math.floor(state.left % 60)).padStart(2, '0')}`;
+    el('mClock').style.color = state.left < 60 ? 'var(--gold)' : '';
+  }
 
   const goal = state.goal;
   el('goalTrack').innerHTML = state.leaders.map((leader, i) => {
@@ -1116,7 +1151,10 @@ document.addEventListener('keydown', (event) => {
 });
 setInterval(() => { if (world?.kind === 'remote') reportView(); }, 1000);
 
-showLobby();
+// Straight into a game: single player needs no server and no lobby. The
+// Rooms button opens the lobby for a different world size, or to join a
+// server if one is running at this address.
+startLocal();
 requestAnimationFrame(loop);
 </script>
 </body>
