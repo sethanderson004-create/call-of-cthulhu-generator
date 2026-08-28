@@ -14,6 +14,7 @@
 // snapshot carries a summary of every market (enough to draw its share bar)
 // and full brand detail only for the markets a client has subscribed to.
 
+import { turnState, ACTION_COSTS, canSpend } from './turns.js';
 import {
   brandsIn, ownedBrands, categoryGrip, effectivePrice, launchMomentum,
   economyShare, firmProfit, netWorth, buyingPower, creditLimit, marketDemand,
@@ -217,6 +218,10 @@ export function snapshot(game, firmId, view = {}) {
       humans: game.firms.filter((f) => f.human && !f.gone).length,
     },
     goal: r3(winShare(game)),
+    turn: game.turnBased ? {
+      ...turnState(game),
+      costs: ACTION_COSTS,
+    } : null,
     // The ladders you are climbing, and what the next rung costs.
     capabilities: Object.entries(CAPABILITIES).map(([key, spec]) => {
       const level = capabilityLevel(game, firmId, key);
@@ -264,6 +269,10 @@ export function worldInfo(game) {
   return {
     seats: game.seats ?? game.firms.length,
     goal: r3(winShare(game)),
+    turn: game.turnBased ? {
+      ...turnState(game),
+      costs: ACTION_COSTS,
+    } : null,
     actions: ACTIONS,
     priceRange: [MIN_PRICE, MAX_PRICE],
     maxEquity: MAX_EQUITY,

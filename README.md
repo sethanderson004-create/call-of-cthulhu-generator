@@ -26,128 +26,103 @@ file. Every roll happens locally in your browser.
 ## 🏙️ Also in this repo: Monopolis
 
 A second, unrelated toy that shares the same house rules (zero dependencies,
-pure tested engine, plain ES modules): a **real-time strategy game about
+pure tested engine, plain ES modules): a **turn-based strategy game about
 building a business empire** — no map, no armies, just markets. It plays on a
-phone, solo against bots or in a live room of **up to a hundred firms**.
+phone, against bots, entirely in the browser.
 
-### The game
+### How a game goes
 
-The economy is a set of **markets** (Coffee, Streaming, Airlines, Solar,
-Fashion, Grocery, Semiconductors, Fitness — repeated across regions as the
-world grows). Each is contested by **brands** owned by you, by rivals, or by
-nobody. Every brand sets a **price** and spends on **marketing**, and those two
-numbers decide its slice: customers are pulled toward brands they know and
-pushed away by expensive ones — hard in price-sensitive categories like
-Airlines, barely at all in Semiconductors.
+Sixteen quarters. The board starts small — four markets, two rivals, a couple
+of brands each — and grows as you do: a new market opens every few quarters.
 
-**Build or buy.** Launch your own brand into any market for a modest price: it
-arrives tiny and unknown, but converts advertising into recognition more than
-twice as fast for its first minute, so a funded launch can outrun a sleepy
-incumbent. Or buy a brand and take its whole slice today — independents at a
-small premium, a rival's at 55% over fair value, the cash going straight into
-their war chest.
+Each quarter you commit **three decisions**, and that scarcity is the whole
+game:
 
-**One-tap campaigns**, so a round is playable with a thumb. Each shows what it
-is worth on that brand *right now* — an estimate in dollars per second, with a
-payback time — because three buttons with invisible returns is not a decision:
+| Decision | Costs |
+| --- | --- |
+| Run a campaign — blitz, promotion, or category push | 1 |
+| Launch a brand into a market | 1 |
+| Build the firm — a rung on a capability ladder | 1 |
+| Acquire a rival's brand | 2 |
 
-| Play | Cost | Effect | Pays when |
-| --- | --- | --- | --- |
-| Ad blitz | $34 | Buys customer reach outright, and reach decays slowly | Your brand's reach is behind its rivals' |
-| Promotion | $28 | Discounts the brand for 22s — and the customers it wins convert into lasting reach | The market is big and price-sensitive |
-| Category push | $60 | Lifts demand for *every* brand in the market | You already hold the biggest slice |
+Setting a brand's **price and marketing budget is free** — that is running what
+you already own, not a decision competing with expansion. Then you end the
+quarter: your rivals commit their moves under the *same* three-decision budget,
+the economy runs forward, and you get a report of what actually changed —
+your share and profit, what each rival did, and the events of the quarter.
 
-The estimates are calibrated against simulated outcomes rather than assumed, so
-a play that says it pays back in forty seconds roughly does.
+There is no clock, no cooldown in seconds, and nothing to out-tap.
+
+### The economy underneath
+
+Every brand sets a price and spends on marketing, and those two numbers decide
+its slice: customers are pulled toward brands they know and pushed away by
+expensive ones — hard in price-sensitive categories like Airlines, barely at
+all in Semiconductors. A brand that sustains its reach climbs from Local to
+Regional, National and Iconic, and each rung pulls a few more customers in on
+its own.
+
+**Campaigns** each show what they are worth on that brand right now, as dollars
+per second with a payback time, calibrated against simulated outcomes: an ad
+blitz buys reach outright, a promotion trades margin for volume and converts
+the customers it wins into lasting reach, a category push grows a whole market
+and so only pays where you already lead.
 
 **You can only raid the weak.** A rival's brand is takeable when it has been
 starved well below its market's even split, when its parent is deep in debt, or
-when you already out-hold that parent in that category. Firms with three brands
-or fewer are sheltered, **your last brand can never be taken**, and losing one
-buys you a fifty-second respite before the next bid — you can be cut down, but
-not farmed while you are reading the notification.
+when you already out-hold that parent in that category. Your last brand can
+never be taken, and losing one buys a respite before the next bid.
 
-**Scale pays.** Brands run side by side in one market share their costs, and a
-large portfolio spreads overhead thinner — consolidating compounds, which is
-what carries someone to a monopoly rather than a permanent standoff.
+**Build the firm** along four ladders of three rungs — Distribution, Research,
+Creative studio, Dealmaking. Nobody can climb them all in one game, so which
+one you pick is the decision the rest of your game hangs off. Each moves
+*share*, not only margins, because a ladder that merely improved profit would
+be a trap.
 
-**Win** by taking a share of all revenue — half of it in a four-firm game, down
-to a fifth in a hundred-firm world — or by leading the leaderboard when the
-ten-minute round clock runs out. In a crowded economy you are really playing
-for rank: nobody monopolises a hundred-firm world in ten minutes.
+**Win** by taking half the economy outright, or by leading when the sixteenth
+quarter closes.
 
-**The money works.** A starting position earns about **+$2/s** doing nothing,
-and every brand's full profit and loss — revenue, cost of goods, marketing,
-overhead — is shown in the brand desk, so when a brand does lose money you can
-see which line is doing it. Campaigns and takeovers are meant to be a real
-sacrifice of that income, not a slide into permanent losses.
+### Playing
 
-### Managing a business on a phone
-
-**My brands** is the default view: every brand you own on one screen, sorted by
-what needs attention — losing money first, then exposed to a takeover — each
-with its share, revenue, profit, reach, and the three campaign buttons attached
-directly, so running your business never requires opening markets one at a
-time. **Your round** draws your share of the economy against the win line as
-the round unfolds. The brand desk breaks out a full profit and loss, so a brand
-that is losing money says which line is doing it.
-
-### Playing solo
-
-`monopolis.html` opens straight into a game — the whole simulation runs in the
-tab, no server involved. **Rooms** picks a different world size (4 firms up to
-100) or joins a live server if one is running at that address. It loads its
-engine as ES modules, so serve the folder rather than opening the file
-directly:
+`monopolis.html` opens straight into a game — everything runs in the tab.
+It loads its engine as ES modules, so serve the folder rather than opening the
+file directly:
 
 ```sh
 npm start                    # then visit localhost:8000/monopolis.html
 npm run build                # or: one self-contained file at dist/monopolis.html
 ```
 
-### Running a server
-
-```sh
-npm run serve                # http://localhost:8080, 100 seats
-node server/monopolis-server.mjs --port 8080 --seats 100
-```
-
-The server is the authority: it runs the world at 10 ticks a second and sends
-each player a snapshot four times a second. Clients submit *commands* and
-receive *snapshots* — they hold no simulation state, so a modified client can
-ask for whatever it likes and gets the same answer as everyone else. Every
-command is re-checked against the engine's rules, and each connection has a
-token-bucket rate limit.
-
-Seats are always full: bots hold every chair, a joining player takes one over,
-and a player who disconnects hands their firm back to a bot rather than
-evaporating mid-round. When someone wins, the result stands for fifteen seconds
-and a fresh world starts with everyone still connected reseated.
-
-Snapshots are **scoped** — the whole market list is sent once, and after that a
-client receives live figures only for the markets it is displaying, plus full
-brand detail for the one it has open. That is what keeps a hundred players
-inside a couple of megabytes a second; measured with a hundred concurrent
-clients, the server used about 2 MB/s and 13% of one core.
-
-WebSockets are implemented from scratch in `server/ws.mjs` (handshake, framing,
-ping/pong, fragmentation) because this repo has no dependencies and wasn't
-going to grow one for a hash and four bytes of framing.
-
 ### Layout
 
 | File | What it is |
 | --- | --- |
-| `src/monopolis.js` | The simulation: markets, brands, pricing, campaigns, takeovers, bots |
-| `src/protocol.js` | Snapshots and commands — the only thing a client ever sees |
-| `server/ws.mjs` | A small RFC 6455 WebSocket implementation |
-| `server/room.mjs` | One authoritative world: seats, join/leave, rate limits, rounds |
-| `server/monopolis-server.mjs` | HTTP + WebSocket wiring and the tick loop |
-| `monopolis.html` | The interface — renders snapshots, whether local or remote |
+| `src/monopolis.js` | The economy: markets, brands, pricing, campaigns, takeovers, capabilities |
+| `src/turns.js` | The turn layer: decision budgets, rivals' quarters, resolution, reports |
+| `src/protocol.js` | Snapshots and commands — the only thing the interface sees |
+| `monopolis.html` | The interface |
 | `tools/build-standalone.mjs` | Inlines the module graph into one offline file |
+| `server/` | A zero-dependency multiplayer server for up to 100 players — see below |
 
-Tests: `npm test` (99 cases, covering the economy, the protocol, the WebSocket
-framing, room lifecycle, and a live server end to end).
+Tests: `npm test` (129 cases, covering the economy, the turn layer, the
+protocol, WebSocket framing, and a live server end to end).
+
+### The multiplayer server
+
+`server/` holds a complete authoritative server — a from-scratch RFC 6455
+WebSocket implementation, a room that seats up to a hundred players with bots
+filling the empty chairs, scoped snapshots, and per-client rate limits. It runs
+the **real-time** version of the economy:
+
+```sh
+npm run serve                # http://localhost:8080
+```
+
+It is not yet reconciled with the turn structure: the browser client above is
+the turn game, and the server still resolves continuously. Making the server
+run quarters — with a timer per quarter and simultaneous resolution — is the
+obvious next step, and the reason it is documented here rather than quietly
+deleted.
 
 ## What it generates
 

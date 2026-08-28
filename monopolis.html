@@ -422,6 +422,72 @@
   }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+  /* ---- turn furniture ------------------------------------------------ */
+  #turnbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(8, 11, 16, 0.96);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+  }
+  #turnbar button { flex: 1 1 auto; min-height: 46px; font-size: 14.5px; white-space: nowrap; }
+  .pips { display: flex; gap: 5px; align-items: center; }
+  .pips i {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid var(--border-strong);
+    display: block;
+  }
+  .pips i.on { background: var(--gold); border-color: var(--gold); }
+  .pips small { color: var(--ink-faint); font-size: 10.5px; margin-left: 4px; letter-spacing: 0.08em; text-transform: uppercase; }
+  main { padding-bottom: 92px; }
+  .cost {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+  }
+  #report {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    display: none;
+    place-items: center;
+    background: rgba(5, 8, 11, 0.9);
+    padding: 18px;
+  }
+  #report.show { display: grid; }
+  #report .box {
+    width: min(460px, 100%);
+    max-height: 84vh;
+    overflow-y: auto;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 18px;
+  }
+  #report h2 {
+    margin: 0 0 12px;
+    font-family: var(--display);
+    font-size: 26px;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .delta { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .delta.up { color: var(--mint); }
+  .delta.down { color: var(--rose); }
+  .reportgrid { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; font-size: 13px; margin-bottom: 14px; }
+  .reportgrid .head { color: var(--ink-faint); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .events { border-top: 1px solid var(--border); padding-top: 10px; }
+  .events div { font-size: 12.5px; color: var(--ink-dim); padding: 3px 0; line-height: 1.45; }
+
   #overlay {
     position: fixed;
     inset: 0;
@@ -449,19 +515,15 @@
 <div id="hud">
   <div id="hudTop">
     <h1>Mono<span>polis</span></h1>
-    <span class="conn solo" id="connection">solo</span>
     <div class="metrics">
+      <div class="metric"><small>Quarter</small><b id="mQuarter">—</b></div>
       <div class="metric"><small>Cash</small><b id="mCash">—</b></div>
       <div class="metric"><small>Profit</small><b id="mProfit">—</b></div>
       <div class="metric"><small>Share</small><b id="mShare">—</b></div>
       <div class="metric"><small>Rank</small><b id="mRank">—</b></div>
-      <div class="metric"><small>Time left</small><b id="mClock">—</b></div>
-      <div class="metric wide"><small>Net worth</small><b id="mWorth">—</b></div>
       <div class="metric wide"><small>Brands</small><b id="mBrands">—</b></div>
     </div>
-    <button class="gold" id="playBtn">Pause</button>
-    <button id="speedBtn">2×</button>
-    <button id="lobbyBtn">Rooms</button>
+    <button id="newBtn">New game</button>
   </div>
   <div id="goalTrack"></div>
   <div id="population" class="sub"></div>
@@ -530,32 +592,40 @@
   </aside>
 </main>
 
+<div id="turnbar">
+  <div class="pips" id="pips" aria-label="Decisions left this quarter"></div>
+  <button class="gold" id="endTurn">End quarter</button>
+</div>
+
 <footer>Zero dependencies, no build step. Engine: <code>src/monopolis.js</code> · server: <code>node server/monopolis-server.mjs</code></footer>
 
 <div id="toast"></div>
 
+<div id="report"><div class="box">
+  <h2 id="reportTitle">Quarter</h2>
+  <div id="reportBody"></div>
+  <button class="gold wide" id="reportBtn">Next quarter</button>
+</div></div>
+
 <div id="lobby"><div class="box">
   <h2>Monopolis</h2>
-  <p class="hint">A real-time economy where you win markets, not ground. Everything runs in this
-    tab — no server needed. Bigger worlds are wilder: in a hundred-firm economy you are playing
-    for rank on the leaderboard, not for a monopoly.</p>
+  <p class="hint">Sixteen quarters to build a business empire. Each quarter you commit three
+    decisions — launch, buy, campaign, or build the firm — then everyone's moves resolve at once
+    and you read what happened. No clock, nothing to out-tap.</p>
   <div class="lobbyrow">
-    <label class="lever">Your name<input id="playerName" type="text" maxlength="28" placeholder="Anonymous" /></label>
+    <label class="lever">Your firm<input id="playerName" type="text" maxlength="28" placeholder="Your Holdings" /></label>
   </div>
-  <div class="serverline" id="lobbyServer">Looking for a server…</div>
-  <button class="gold wide" id="joinBtn">Join</button>
   <div class="lobbyrow">
-    <label class="lever">Solo world size <span class="val"></span>
+    <label class="lever">Rivals <span class="val"></span>
       <select id="botCount">
-        <option value="4">4 firms — a duel</option>
-        <option value="8" selected>8 firms — recommended</option>
-        <option value="20">20 firms — busy</option>
-        <option value="60">60 firms — crowded</option>
-        <option value="100">100 firms — a whole economy</option>
+        <option value="1">One rival — a duel</option>
+        <option value="2" selected>Two rivals — recommended</option>
+        <option value="3">Three rivals — crowded</option>
+        <option value="5">Five rivals — a scramble</option>
       </select>
     </label>
   </div>
-  <button class="wide" id="soloBtn">Play solo</button>
+  <button class="gold wide" id="soloBtn">Start</button>
 </div></div>
 
 <div id="overlay"><div class="box">
@@ -565,8 +635,10 @@
 </div></div>
 
 <script type="module">
-import { createGame, tick, computeShares } from './src/monopolis.js';
-import { snapshot, worldInfo, applyCommand } from './src/protocol.js';
+import { snapshot, worldInfo } from './src/protocol.js';
+import {
+  startGame, endTurn, order, playCampaign, playLaunch, playAcquire, playDivest, playInvest,
+} from './src/turns.js';
 
 const el = (id) => document.getElementById(id);
 const money = (n) => (n < 0 ? '-' : '') + '$' + (Math.abs(n) >= 1000
@@ -590,17 +662,15 @@ const escape = (s) => String(s).replace(/[&<>"]/g, (c) => (
 // in this tab or on a server with ninety-nine other people in it.
 // ---------------------------------------------------------------------------
 
-class LocalWorld {
-  constructor({ players = 12, speed = 2 } = {}) {
+class TurnWorld {
+  constructor({ rivals = 2 } = {}) {
     this.kind = 'local';
-    this.speed = speed;
-    this.players = players;
+    this.rivals = rivals;
     this.start();
   }
 
   start() {
-    this.game = createGame({ players: this.players });
-    computeShares(this.game);
+    this.game = startGame({ rivals: this.rivals });
     this.you = 0;
     this.view = { rows: null, detail: [] };
     this.status = 'solo';
@@ -609,75 +679,34 @@ class LocalWorld {
   info() { return { ...worldInfo(this.game), you: this.you, round: 1 }; }
   state() { return snapshot(this.game, this.you, this.view); }
   setView(view) { this.view = { rows: null, detail: view.detail }; }
-  send(command) { return applyCommand(this.game, this.you, command); }
   restart() { this.start(); }
 
-  advance(dt) {
-    if (!this.game.over) tick(this.game, dt * this.speed);
-  }
-}
-
-class RemoteWorld {
-  constructor(url, name) {
-    this.kind = 'remote';
-    this.url = url;
-    this.name = name;
-    this.status = 'connecting';
-    this._info = null;
-    this._state = null;
-    this.onInfo = null;
-    this.connect();
-  }
-
-  connect() {
-    this.socket = new WebSocket(this.url);
-    this.socket.addEventListener('open', () => {
-      this.status = 'joining';
-      this.socket.send(JSON.stringify({ type: 'join', name: this.name }));
-    });
-    this.socket.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'welcome') {
-        const first = !this._info;
-        this._info = message.info;
-        this.status = 'playing';
-        this.onInfo?.(first);
-      } else if (message.type === 'state') {
-        this._state = message.state;
-      } else if (message.type === 'full') {
-        this.status = 'full';
-      } else if (message.type === 'rejected') {
-        toast(message.reason);
-      }
-    });
-    this.socket.addEventListener('close', () => {
-      if (this.status !== 'full') this.status = 'dropped';
-    });
-    this.socket.addEventListener('error', () => { this.status = 'dropped'; });
-  }
-
-  info() { return this._info; }
-  state() { return this._state; }
-  advance() {} // The server owns the clock.
-
-  setView(view) {
-    if (this.socket?.readyState === 1) {
-      this.socket.send(JSON.stringify({ type: 'view', view }));
+  /** Commit a decision. Everything is checked by the rules, not by the page. */
+  send(command) {
+    const game = this.game;
+    switch (command.type) {
+      case 'price':
+      case 'marketing':
+        return order(game, 0, command.brand, {
+          price: command.type === 'price' ? command.value : undefined,
+          marketing: command.type === 'marketing' ? command.value : undefined,
+        });
+      case 'action': return playCampaign(game, 0, command.key, command.target);
+      case 'launch': return playLaunch(game, 0, command.market);
+      case 'acquire': return playAcquire(game, 0, command.brand);
+      case 'divest': return playDivest(game, 0, command.brand);
+      case 'invest': return playInvest(game, 0, command.capability);
+      default: return { ok: false, reason: 'unknown decision' };
     }
   }
 
-  send(command) {
-    if (this.socket?.readyState !== 1) return { ok: false, reason: 'offline' };
-    this.socket.send(JSON.stringify({ type: 'cmd', id: Date.now(), command }));
-    return { ok: true, pending: true };
-  }
+  endTurn() { return endTurn(this.game); }
 }
 
 // ---------------------------------------------------------------------------
 // State held by the interface itself
 // ---------------------------------------------------------------------------
 
-const SPEEDS = [1, 2, 4, 8];
 let world = null;
 let info = null;
 let state = null;
@@ -685,16 +714,20 @@ let selected = null;      // brand id open in the desk
 let openMarket = null;    // market whose brands are expanded
 let tab = 'portfolio';    // 'portfolio' | 'mine' | 'all'
 let search = '';
-let speedIndex = 1;
-let paused = false;
-let last = performance.now();
-let lastPaint = 0;
 let toastUntil = 0;
 
 const marketById = (id) => info?.markets?.find((m) => m.id === id);
 const detailFor = (id) => state?.detail?.find((b) => b.id === id) ?? null;
 const firmColor = (id) => info?.firms?.find((f) => f.id === id)?.color ?? '#4c5f70';
 const firmName = (id) => info?.firms?.find((f) => f.id === id)?.name ?? 'independent';
+
+/** Every decision goes through here: commit it, then redraw what changed. */
+function commit(command) {
+  const result = world.send(command);
+  if (!result.ok && result.reason) toast(result.reason);
+  refresh();
+  return result;
+}
 
 function toast(text) {
   el('toast').textContent = text;
@@ -703,65 +736,43 @@ function toast(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Lobby
+// Starting a game
 // ---------------------------------------------------------------------------
 
-async function detectServer() {
-  if (!/^https?:/.test(location.protocol)) return null;
-  try {
-    const response = await fetch('/health', { cache: 'no-store' });
-    if (!response.ok) return null;
-    const health = await response.json();
-    return health.ok ? health : null;
-  } catch { return null; }
-}
-
-async function showLobby() {
-  try {
-    const saved = localStorage.getItem('monopolis.players');
-    if (saved) el('botCount').value = saved;
-  } catch { /* private mode */ }
-  el('lobbyServer').textContent = 'Looking for a server…';
-  el('joinBtn').disabled = true;
-  el('lobby').classList.add('show');
-  const server = await detectServer();
-  el('lobbyServer').innerHTML = server
-    ? `<b>${server.humans}</b> playing · ${server.active} firms · ${server.markets} markets · round ${server.round}`
-    : 'No server found at this address. Single player runs entirely in this tab.';
-  el('joinBtn').disabled = !server;
-  el('joinBtn').textContent = server ? `Join the live room — ${server.humans} playing` : 'No live room here';
-}
-
-function startLocal() {
-  const players = Number(el('botCount').value || 8);
-  try { localStorage.setItem('monopolis.players', String(players)); } catch { /* private mode */ }
-  world = new LocalWorld({ players, speed: SPEEDS[speedIndex] });
+function newGame() {
+  const rivals = Number(el('botCount').value || 2);
+  try { localStorage.setItem('monopolis.rivals', String(rivals)); } catch { /* private mode */ }
+  world = new TurnWorld({ rivals });
   info = world.info();
-  el('lobby').classList.remove('show');
   resetView();
-}
-
-function startRemote() {
-  const name = el('playerName').value.trim().slice(0, 28) || 'Anonymous';
-  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/`;
-  world = new RemoteWorld(url, name);
-  world.onInfo = (first) => { info = world.info(); if (first) resetView(); else resetView(true); };
   el('lobby').classList.remove('show');
+  el('report').classList.remove('show');
+  el('overlay').classList.remove('show');
+  refresh();
 }
 
-function resetView(keepTab = false) {
+/** Clear anything that belonged to the previous game. */
+function resetView() {
   history.length = 0;
   seenMilestones.clear();
   capabilitySignature = '';
-  selected = null;
-  openMarket = null;
-  if (!keepTab) tab = 'portfolio';
-  el('markets').innerHTML = '';
-  el('portfolio').innerHTML = '';
   portfolioSignature = '';
   marketSignature = '';
+  selected = null;
+  openMarket = null;
+  tab = 'portfolio';
+  el('markets').innerHTML = '';
+  el('portfolio').innerHTML = '';
   closeSheet();
-  if (world) reportView();
+  reportView();
+}
+
+function showLobby() {
+  try {
+    const saved = localStorage.getItem('monopolis.rivals');
+    if (saved) el('botCount').value = saved;
+  } catch { /* private mode */ }
+  el('lobby').classList.add('show');
 }
 
 // ---------------------------------------------------------------------------
@@ -1174,26 +1185,26 @@ function whyBlocked(brand) {
 function wireDesk(brand) {
   for (const button of el('deskBody').querySelectorAll('[data-act]')) {
     button.addEventListener('click', () => {
-      world.send({ type: 'action', key: button.dataset.act, target: Number(button.dataset.target) });
+      commit({ type: 'action', key: button.dataset.act, target: Number(button.dataset.target) });
     });
   }
   const price = el('pRange');
   if (price) {
     price.addEventListener('input', () => {
       price.previousElementSibling?.remove?.();
-      world.send({ type: 'price', brand: brand.id, value: Number(price.value) / 100 });
+      commit({ type: 'price', brand: brand.id, value: Number(price.value) / 100 });
     });
   }
   const ads = el('aRange');
   if (ads) ads.addEventListener('input', () => {
-    world.send({ type: 'marketing', brand: brand.id, value: Number(ads.value) });
+    commit({ type: 'marketing', brand: brand.id, value: Number(ads.value) });
   });
   el('sellBtn')?.addEventListener('click', () => {
-    world.send({ type: 'divest', brand: brand.id });
+    commit({ type: 'divest', brand: brand.id });
     selected = null;
     closeSheet();
   });
-  el('buyBtn')?.addEventListener('click', () => world.send({ type: 'acquire', brand: brand.id }));
+  el('buyBtn')?.addEventListener('click', () => commit({ type: 'acquire', brand: brand.id }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,12 +1214,11 @@ function wireDesk(brand) {
 const history = []; // { t, share, worth }
 
 function recordHistory() {
-  if (!state?.you) return;
+  if (!state?.you || !state.turn) return;
   const last = history.at(-1);
-  if (last && state.t - last.t < 1) return;
-  if (last && state.t < last.t) history.length = 0; // a new round started
-  history.push({ t: state.t, share: state.you.share, worth: state.you.worth });
-  if (history.length > 900) history.shift();
+  if (last && last.t === state.turn.quarter) return; // one point per quarter
+  if (last && state.turn.quarter < last.t) history.length = 0; // a new game
+  history.push({ t: state.turn.quarter, share: state.you.share, worth: state.you.worth });
 }
 
 function drawTrend() {
@@ -1226,7 +1236,7 @@ function drawTrend() {
   if (history.length < 2 || !state) return;
 
   const span = Math.max(state.goal, ...history.map((h) => h.share)) * 1.15;
-  const duration = Math.max(60, history.at(-1).t);
+  const duration = Math.max(4, state.turn?.quarters ?? 16);
   const x = (t) => (t / duration) * width;
   const y = (share) => height - (share / span) * (height - 6) - 3;
 
@@ -1254,7 +1264,7 @@ function drawTrend() {
 
   const peak = history.reduce((best, h) => (h.share > best.share ? h : best), history[0]);
   el('trendNow').textContent = pct(state.you.share);
-  el('trendPeak').textContent = `${pct(peak.share)} at ${Math.round(peak.t)}s`;
+  el('trendPeak').textContent = `${pct(peak.share)} in quarter ${peak.t}`;
 }
 
 let capabilitySignature = '';
@@ -1322,108 +1332,130 @@ function announceMilestones() {
 
 function renderHud() {
   const you = state?.you;
+  const turn = state?.turn;
   if (!you) return;
+  el('mQuarter').textContent = turn ? `${turn.quarter}/${turn.quarters}` : '—';
   el('mCash').textContent = money(you.cash);
   el('mCash').style.color = you.cash < 60 && you.profit < 0 ? 'var(--rose)' : '';
   el('mProfit').textContent = (you.profit >= 0 ? '+' : '') + rate(you.profit);
   el('mProfit').style.color = you.profit >= 0 ? 'var(--mint)' : 'var(--rose)';
   el('mShare').textContent = pct(you.share);
   el('mRank').textContent = `#${you.rank}`;
-  el('mWorth').textContent = money(you.worth);
   el('mBrands').textContent = you.brands;
-  if (state.left === null) {
-    el('mClock').textContent = '—';
-  } else {
-    const minutes = Math.floor(state.left / 60);
-    el('mClock').textContent = `${minutes}:${String(Math.floor(state.left % 60)).padStart(2, '0')}`;
-    el('mClock').style.color = state.left < 60 ? 'var(--gold)' : '';
-  }
 
-  const goal = state.goal;
-  el('goalTrack').innerHTML = state.leaders.map((leader, i) => {
-    const offset = state.leaders.slice(0, i).reduce((sum, l) => sum + l.share, 0);
-    return `<i style="left:${(offset * 100).toFixed(2)}%;width:${(leader.share * 100).toFixed(2)}%;background:${leader.color}"></i>`;
-  }).join('') + `<span class="mark" style="left:${(goal * 100).toFixed(1)}%"></span>`;
+  const rows = state.leaders;
+  let offset = 0;
+  el('goalTrack').innerHTML = rows.map((leader) => {
+    const seg = `<i style="left:${(offset * 100).toFixed(2)}%;width:${(leader.share * 100).toFixed(2)}%;background:${leader.color}"></i>`;
+    offset += leader.share;
+    return seg;
+  }).join('') + `<span class="mark" style="left:${(state.goal * 100).toFixed(1)}%"></span>`;
 
-  el('leaders').innerHTML = state.leaders.map((leader, i) => `
+  el('population').textContent = `${state.population.active} firms · ${
+    pct(state.goal)} of the economy wins outright`;
+
+  el('leaders').innerHTML = rows.map((leader, i) => `
     <tr class="${leader.out ? 'out' : ''}${leader.you ? ' you' : ''}">
       <td class="rank">${i + 1}</td>
       <td class="nm"><span class="dot" style="display:inline-block;background:${leader.color};margin-right:6px"></span>${
         escape(leader.you ? 'You' : leader.name)}</td>
       <td>${pct(leader.share)}</td>
       <td>${money(leader.worth)}</td>
-    </tr>`).join('')
-    + (state.you.rank > 10 ? `<tr class="you"><td class="rank">${state.you.rank}</td>
-        <td class="nm"><span class="dot" style="display:inline-block;background:${state.you.color};margin-right:6px"></span>You</td>
-        <td>${pct(state.you.share)}</td><td>${money(state.you.worth)}</td></tr>` : '');
+    </tr>`).join('');
 
   el('ticker').innerHTML = state.log.map((e) =>
-    `<div><span class="mono" style="color:${e.color}">${e.t}s</span> ${escape(e.text)}</div>`).join('')
-    || '<div>Quiet so far.</div>';
-
-  const pop = state.population;
-  el('population').textContent = world.kind === 'remote'
-    ? `${pop.humans} playing · ${pop.active} firms · goal ${pct(goal)}`
-    : `${pop.active} firms · goal ${pct(goal)}`;
-  el('connection').textContent = world.kind === 'remote'
-    ? ({ connecting: 'connecting…', joining: 'joining…', playing: 'live', dropped: 'disconnected', full: 'room full' })[world.status]
-    : 'solo';
-  el('connection').className = 'conn ' + (world.kind === 'local' ? 'solo' : world.status);
+    `<div>${escape(e.text)}</div>`).join('') || '<div>Nothing has happened yet.</div>';
 }
 
 function renderOverlay() {
-  const finished = state?.over;
+  const finished = state?.turn?.over ?? state?.over;
   el('overlay').classList.toggle('show', Boolean(finished));
   if (!finished) return;
-  const won = state.you && state.winner === state.you.name;
-  el('ovTitle').textContent = won ? 'Monopoly.' : 'Round over.';
+  const won = state.turn?.winner === state.you?.name || state.winner === state.you?.name;
+  el('ovTitle').textContent = won ? 'The market is yours.' : 'Game over.';
   el('ovTitle').style.color = won ? 'var(--mint)' : 'var(--gold)';
+  const winner = state.turn?.winner ?? state.winner;
   el('ovText').textContent = won
-    ? `You took ${pct(state.you.share)} of the entire economy — worth ${money(state.you.worth)}.`
-    : `${state.winner ?? 'Nobody'} took the round. You finished ${state.you ? `#${state.you.rank} on ${pct(state.you.share)}` : 'out'}.`;
-  el('ovBtn').textContent = world.kind === 'remote' ? 'Waiting for the next round…' : 'New economy';
-  el('ovBtn').disabled = world.kind === 'remote';
+    ? `You finished on ${pct(state.you.share)} of the whole economy, worth ${money(state.you.worth)}.`
+    : `${winner ?? 'Nobody'} took it. You finished #${state.you?.rank} on ${pct(state.you?.share ?? 0)}.`;
+  el('ovBtn').textContent = 'New game';
 }
 
 // ---------------------------------------------------------------------------
 // Loop
 // ---------------------------------------------------------------------------
 
+/**
+ * Tell the world which markets to send brand detail for: the ones your own
+ * brands trade in (so their campaign estimates are to hand) plus whichever
+ * market you have expanded.
+ */
 function reportView() {
-  const rows = visibleMarkets().map(({ meta }) => meta.id);
-  // In the portfolio view, "open" the markets your own brands trade in, so
-  // their play estimates come down with the snapshot.
-  const detail = tab === 'portfolio'
-    ? [...new Set((state?.portfolio ?? []).map((row) => row.market))].slice(0, 4)
-    : openMarket === null ? [] : [openMarket];
-  world.setView({ rows, detail });
+  if (!world) return;
+  const mine = [...new Set((state?.portfolio ?? []).map((row) => row.market))];
+  const detail = openMarket === null ? mine : [...new Set([openMarket, ...mine])];
+  world.setView({ detail: detail.slice(0, 8) });
 }
 
-function loop(now) {
-  const dt = Math.min((now - last) / 1000, 0.25);
-  last = now;
-  if (world) {
-    if (!paused) world.advance(dt);
-    const next = world.state();
-    if (next) {
-      state = next;
-      info = info ?? world.info();
-      if (now - lastPaint > 180) {
-        lastPaint = now;
-        renderPortfolio();
-        renderMarkets();
-        renderDesk();
-        renderHud();
-        renderCapabilities();
-        announceMilestones();
-        recordHistory();
-        drawTrend();
-        renderOverlay();
-      }
-    }
-  }
-  if (toastUntil && now > toastUntil) { el('toast').classList.remove('show'); toastUntil = 0; }
-  requestAnimationFrame(loop);
+/**
+ * Nothing here is on a clock. The page redraws when the world changes —
+ * because you decided something, or because a quarter resolved — and sits
+ * still the rest of the time, which is the whole point of a turn.
+ */
+function refresh() {
+  if (!world) return;
+  state = world.state();
+  info = info ?? world.info();
+  renderPortfolio();
+  renderMarkets();
+  renderDesk();
+  renderHud();
+  renderCapabilities();
+  renderTurnBar();
+  recordHistory();
+  drawTrend();
+  renderOverlay();
+}
+
+function renderTurnBar() {
+  const turn = state?.turn;
+  if (!turn) return;
+  const pips = Array.from({ length: turn.actionsPerTurn }, (_, i) =>
+    `<i class="${i < turn.actionsLeft ? 'on' : ''}"></i>`).join('');
+  el('pips').innerHTML = `${pips}<small>${turn.actionsLeft} left</small>`;
+  el('endTurn').disabled = Boolean(turn.over);
+  el('endTurn').textContent = turn.actionsLeft === turn.actionsPerTurn
+    ? 'End quarter (nothing committed)' : 'End quarter';
+}
+
+/** The beat that makes a turn a turn: what your decisions actually did. */
+function showReport(report) {
+  if (!report) return;
+  const arrow = (n, unit = '') => {
+    const sign = n > 0 ? 'up' : n < 0 ? 'down' : '';
+    const shown = unit === '%' ? `${(n * 100).toFixed(1)}pp` : `${n >= 0 ? '+' : ''}${money(n)}`;
+    return `<span class="delta ${sign}">${n > 0 && unit === '%' ? '+' : ''}${shown}</span>`;
+  };
+  el('reportTitle').textContent = `Quarter ${report.quarter} results`;
+  el('reportBody').innerHTML = `
+    <div class="reportgrid">
+      <span class="head">You</span><span class="head">Now</span><span class="head">Change</span>
+      <span>Market share</span><span class="delta">${pct(report.you.share)}</span>${arrow(report.you.shareDelta, '%')}
+      <span>Profit</span><span class="delta">${rate(report.you.profit)}</span>${arrow(report.you.profitDelta)}
+      <span>Cash</span><span class="delta">${money(report.you.cash)}</span>${arrow(report.you.cashDelta)}
+      <span>Brands</span><span class="delta">${report.you.brands}</span>
+        <span class="delta ${report.you.brandsDelta > 0 ? 'up' : report.you.brandsDelta < 0 ? 'down' : ''}">${
+          report.you.brandsDelta >= 0 ? '+' : ''}${report.you.brandsDelta}</span>
+    </div>
+    <div class="reportgrid">
+      <span class="head">Rivals</span><span class="head">Share</span><span class="head">Change</span>
+      ${report.rivals.map((rival) => `
+        <span><span class="dot" style="display:inline-block;background:${rival.color};margin-right:6px"></span>${escape(rival.name)}</span>
+        <span class="delta">${pct(rival.share)}</span>${arrow(rival.shareDelta, '%')}`).join('')}
+    </div>
+    ${report.events.length ? `<div class="events">${report.events.slice(0, 8)
+      .map((e) => `<div>${escape(e.text)}</div>`).join('')}</div>` : ''}`;
+  el('report').classList.add('show');
 }
 
 // ---------------------------------------------------------------------------
@@ -1432,13 +1464,13 @@ function loop(now) {
 
 el('capabilities').addEventListener('click', (event) => {
   const button = event.target.closest('[data-invest]');
-  if (button) world.send({ type: 'invest', capability: button.dataset.invest });
+  if (button) commit({ type: 'invest', capability: button.dataset.invest });
 });
 
 el('portfolio').addEventListener('click', (event) => {
   const play = event.target.closest('[data-act]');
   if (play) {
-    world.send({ type: 'action', key: play.dataset.act, target: Number(play.dataset.target) });
+    commit({ type: 'action', key: play.dataset.act, target: Number(play.dataset.target) });
     return;
   }
   const manage = event.target.closest('[data-manage]');
@@ -1452,15 +1484,16 @@ el('portfolio').addEventListener('click', (event) => {
 el('markets').addEventListener('click', (event) => {
   const openButton = event.target.closest('[data-open]');
   if (openButton) {
-    openMarket = Number(openButton.dataset.open);
+    openMarket = openMarket === Number(openButton.dataset.open)
+      ? null : Number(openButton.dataset.open);
     selected = null;
     reportView();
-    renderMarkets();
+    refresh();
     return;
   }
   const launchButton = event.target.closest('[data-launch]');
   if (launchButton) {
-    world.send({ type: 'launch', market: Number(launchButton.dataset.launch) });
+    commit({ type: 'launch', market: Number(launchButton.dataset.launch) });
     return;
   }
   const brandRow = event.target.closest('[data-brand]');
@@ -1474,20 +1507,15 @@ el('markets').addEventListener('click', (event) => {
 function closeSheet() { el('desk').classList.remove('open'); }
 
 el('sheetClose').addEventListener('click', closeSheet);
-el('playBtn').addEventListener('click', () => {
-  if (world.kind === 'remote') return toast('The server sets the pace in multiplayer.');
-  paused = !paused;
-  el('playBtn').textContent = paused ? 'Play' : 'Pause';
+el('endTurn').addEventListener('click', () => {
+  const report = world.endTurn();
+  refresh();
+  showReport(report);
 });
-el('speedBtn').addEventListener('click', () => {
-  if (world.kind === 'remote') return toast('The server sets the pace in multiplayer.');
-  speedIndex = (speedIndex + 1) % SPEEDS.length;
-  world.speed = SPEEDS[speedIndex];
-  el('speedBtn').textContent = SPEEDS[speedIndex] + '×';
+el('reportBtn').addEventListener('click', () => {
+  el('report').classList.remove('show');
+  refresh();
 });
-el('lobbyBtn').addEventListener('click', showLobby);
-el('soloBtn').addEventListener('click', startLocal);
-el('joinBtn').addEventListener('click', startRemote);
 el('ovBtn').addEventListener('click', () => {
   if (world.kind === 'local') { world.restart(); info = world.info(); resetView(); }
 });
@@ -1498,15 +1526,14 @@ for (const button of document.querySelectorAll('[data-tab]')) {
       other.classList.toggle('on', other === button);
     }
     reportView();
-    renderPortfolio();
-    renderMarkets();
+    refresh();
   });
 }
 el('search').addEventListener('input', (event) => {
   search = event.target.value;
   if (search) { tab = 'all'; for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === 'all'); }
   reportView();
-  renderMarkets();
+  refresh();
 });
 document.addEventListener('keydown', (event) => {
   if (event.code === 'Escape') closeSheet();
@@ -1514,13 +1541,9 @@ document.addEventListener('keydown', (event) => {
 });
 // Both worlds need this: it is what tells the snapshot which markets to send
 // brand detail for, and the play estimates ride along with that detail.
-setInterval(() => { if (world) reportView(); }, 1000);
+// The view only needs re-declaring when what you are looking at changes.
 
-// Straight into a game: single player needs no server and no lobby. The
-// Rooms button opens the lobby for a different world size, or to join a
-// server if one is running at this address.
-startLocal();
-requestAnimationFrame(loop);
+newGame();
 </script>
 </body>
 </html>

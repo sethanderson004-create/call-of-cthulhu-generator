@@ -49,6 +49,20 @@ const chunks = [];
 const seen = new Set();
 for (const [, , dep] of ui.matchAll(IMPORT)) await inline(dep, new URL('monopolis.html', root), seen, chunks);
 
+// Inlining flattens every module and the page's own script into one scope, so
+// a name used twice becomes a syntax error in the bundle while the served
+// version, with real module boundaries, works fine. Catch it at build time.
+const declarations = /^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/gm;
+const seenNames = new Map();
+for (const [source, label] of [...chunks.map((c, i) => [c, `module ${i + 1}`]), [ui, 'the page script']]) {
+  for (const [, name] of source.matchAll(declarations)) {
+    if (seenNames.has(name)) {
+      throw new Error(`name collision: "${name}" is declared in ${seenNames.get(name)} and again in ${label} — inlining puts them in one scope, so one of them must be renamed`);
+    }
+    seenNames.set(name, label);
+  }
+}
+
 const bundled = page.slice(0, start + scriptOpen.length)
   + `\n${chunks.join('\n')}\n// ---- interface ----${ui.replace(IMPORT, '')}`
   + page.slice(end);

@@ -1244,8 +1244,15 @@ export function tick(game, dt, rng = Math.random) {
     }
   }
 
-  for (const firm of game.firms) {
-    if (!firm.human && !firm.boughtOut) runAi(game, firm, dt, rng);
+  // In a turn-based game the rivals have already committed their moves for
+  // this quarter, and the economy is only being played forward. Running the
+  // continuous AI here as well would let them act hundreds of times while a
+  // person acts three — which is exactly how a strategy game turns into a
+  // game you lose to a menu.
+  if (!game.turnBased) {
+    for (const firm of game.firms) {
+      if (!firm.human && !firm.boughtOut) runAi(game, firm, dt, rng);
+    }
   }
 
   // Cash is guarded everywhere it is spent; this only sweeps up float dust.
