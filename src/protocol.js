@@ -20,8 +20,8 @@ import {
   brandValue, acquisitionPrice, canAcquire, canLaunch, canRunAction, isNeglected,
   launchCost, standings, activeFirms, winShare, timeLeft,
   setPrice, setMarketing, runAction, launchBrand, acquire, divest,
-  estimateAction, isVulnerable,
-  ACTIONS, MAX_EQUITY, MIN_PRICE, MAX_PRICE, ESTIMATE_HORIZON,
+  estimateAction, isVulnerable, brandTier, capabilityLevel, capabilityCost, canInvest, invest,
+  ACTIONS, CAPABILITIES, TIERS, MAX_EQUITY, MIN_PRICE, MAX_PRICE, ESTIMATE_HORIZON,
 } from './monopolis.js';
 
 /** Numbers on the wire are rounded — nobody can see the fourth decimal. */
@@ -36,6 +36,7 @@ export const COMMANDS = {
   launch: { args: ['market'] },
   acquire: { args: ['brand'] },
   divest: { args: ['brand'] },
+  invest: { args: ['capability'] },
 };
 
 // ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ function marketRow(game, market, firmId) {
     d: r2(marketDemand(game, market)),
     b: r2(market.buzz),
     g: r3(categoryGrip(game, firmId, market.id)),
-    lc: Math.round(launchCost(game, market.id)),
+    lc: Math.round(launchCost(game, market.id, firmId)),
     l: launch.ok ? 1 : 0,
     lr: launch.ok ? undefined : launch.reason,
     s: slices,
@@ -100,6 +101,7 @@ function brandDetail(game, brand, firmId) {
       - brand.marketing - brand.profit),
     value: Math.round(brandValue(game, brand.id)),
     launching: brand.born > 0 && launchMomentum(game, brand) > 1.05,
+    tier: brandTier(brand).name,
     weak: brand.owner !== null && isNeglected(game, brand.id),
     takeover: mine ? null : Math.round(acquisitionPrice(game, firmId, brand.id)),
     canBuy: mine ? false : check.ok,
@@ -148,6 +150,8 @@ function portfolio(game, firmId) {
       promo: game.time < brand.promoUntil,
       exposed: isVulnerable(game, brand.id, null),
       launching: brand.born > 0 && launchMomentum(game, brand) > 1.05,
+      tier: brandTier(brand).name,
+      nextTier: TIERS.find((t) => t.at > brand.equity) ?? null,
     }))
     .sort((a, b) => (a.profit >= 0) - (b.profit >= 0)
       || (b.exposed ? 1 : 0) - (a.exposed ? 1 : 0)
@@ -213,6 +217,23 @@ export function snapshot(game, firmId, view = {}) {
       humans: game.firms.filter((f) => f.human && !f.gone).length,
     },
     goal: r3(winShare(game)),
+    // The ladders you are climbing, and what the next rung costs.
+    capabilities: Object.entries(CAPABILITIES).map(([key, spec]) => {
+      const level = capabilityLevel(game, firmId, key);
+      const check = canInvest(game, firmId, key);
+      return {
+        key,
+        label: spec.label,
+        blurb: spec.blurb,
+        level,
+        max: spec.max,
+        now: level > 0 ? spec.detail(level) : null,
+        next: level < spec.max ? spec.detail(level + 1) : null,
+        cost: capabilityCost(game, firmId, key),
+        can: check.ok,
+        reason: check.ok ? null : check.reason,
+      };
+    }),
     left: timeLeft(game) === null ? null : Math.round(timeLeft(game)),
     over: game.over,
     outcome: game.outcome,
@@ -319,6 +340,13 @@ export function applyCommand(game, firmId, command) {
       const b = brand(command.brand);
       if (!b) return { ok: false, reason: 'malformed' };
       return divest(game, firmId, b.id);
+    }
+    case 'invest': {
+      if (typeof command.capability !== 'string'
+          || !Object.hasOwn(CAPABILITIES, command.capability)) {
+        return { ok: false, reason: 'no such capability' };
+      }
+      return invest(game, firmId, command.capability);
     }
     default:
       return { ok: false, reason: 'unknown command' };

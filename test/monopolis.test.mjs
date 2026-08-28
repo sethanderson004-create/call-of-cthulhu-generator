@@ -15,6 +15,8 @@ import {
   OPENING_GRACE, NEGLECT_RATIO, CATEGORY_EDGE, INTEGRATION_LOCK, SHELTERED_SIZE,
   ROUND_SECONDS, timeLeft, activeFirms, addFirm, removeFirm, worldSize, winShare,
   RAID_RESPITE, estimateAction, ESTIMATE_HORIZON, PROMO_LOYALTY,
+  CAPABILITIES, CAPABILITY_COSTS, TIERS, capabilityLevel, capabilityCost,
+  canInvest, invest, brandTier,
   scaleFactor, OVERHEAD_REFERENCE_DEMAND, launchBrand, canLaunch, launchCost,
   runAction, canRunAction, effectivePrice, launchMomentum, ACTIONS, stableSize,
   CATEGORY_SYNERGY,
@@ -289,6 +291,140 @@ test('a category push is worth more where you already lead', () => {
   computeShares(game);
   const dominant = estimateAction(game, 0, 'push', market.id).gain;
   assert.ok(dominant > small * 2, 'growing a category you own beats growing one you don\'t');
+});
+
+test('capabilities are bought a rung at a time, at a rising price', () => {
+  const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const firm = game.firms[0];
+  firm.cash = 10_000;
+
+  for (let level = 1; level <= CAPABILITIES.research.max; level++) {
+    const cost = capabilityCost(game, 0, 'research');
+    assert.equal(cost, CAPABILITY_COSTS[level - 1]);
+    const before = firm.cash;
+    assert.equal(invest(game, 0, 'research').ok, true);
+    assert.equal(capabilityLevel(game, 0, 'research'), level);
+    assert.ok(Math.abs((before - firm.cash) - cost) < 1e-6);
+  }
+  assert.equal(capabilityCost(game, 0, 'research'), null, 'the ladder has a top');
+  assert.equal(canInvest(game, 0, 'research').reason, 'fully built');
+  assert.equal(invest(game, 0, 'research').ok, false);
+});
+
+test('you cannot buy a rung you cannot afford', () => {
+  const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  game.firms[0].cash = 0;
+  game.firms[0].debt = creditLimit(game, 0);
+  assert.equal(canInvest(game, 0, 'creative').reason, 'not enough capital');
+  assert.equal(capabilityLevel(game, 0, 'creative'), 0);
+  assert.equal(canInvest(game, 0, 'nonsense').ok, false);
+});
+
+test('each capability does the thing it says on the tin', () => {
+  const setup = () => {
+    const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+    game.firms[0].cash = 10_000;
+    computeShares(game);
+    return game;
+  };
+
+  // Research: cheaper goods and a better product, so both margin and share.
+  const research = setup();
+  const brand = ownedBrands(research, 0)[0];
+  const profitBefore = brand.profit;
+  const shareBefore = brand.share;
+  invest(research, 0, 'research');
+  assert.ok(brand.profit > profitBefore, 'cheaper units mean more profit');
+  assert.ok(brand.share > shareBefore, 'and a better product wins customers');
+
+  // Distribution: lower overhead, which is also visible as profit.
+  const distribution = setup();
+  const overheadBrand = ownedBrands(distribution, 0)[0];
+  const beforeOverhead = overheadBrand.profit;
+  invest(distribution, 0, 'distribution');
+  assert.ok(overheadBrand.profit > beforeOverhead);
+
+  // Dealmaking: a smaller premium on the same brand.
+  const deals = setup();
+  deals.time = OPENING_GRACE;
+  const target = deals.brands.find((b) => b.owner === null);
+  const fullPrice = acquisitionPrice(deals, 0, target.id);
+  invest(deals, 0, 'dealmaking');
+  assert.ok(acquisitionPrice(deals, 0, target.id) < fullPrice);
+
+  // Creative: marketing converts into reach faster.
+  const creative = setup();
+  const adBrand = ownedBrands(creative, 0)[0];
+  adBrand.equity = 30;
+  adBrand.marketing = 10;
+  const plain = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const plainBrand = ownedBrands(plain, 0)[0];
+  plainBrand.equity = 30;
+  plainBrand.marketing = 10;
+  invest(creative, 0, 'creative');
+  for (let i = 0; i < 40; i++) { tick(creative, 0.5, half); tick(plain, 0.5, half); }
+  assert.ok(adBrand.equity > plainBrand.equity, 'a studio makes every ad dollar go further');
+});
+
+test('capability ladders move share, not just margins', () => {
+  // A ladder that only improved profit would be a trap: rounds are decided on
+  // share of revenue, so building the firm has to make it more competitive.
+  for (const key of ['distribution', 'research', 'creative']) {
+    const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+    game.firms[0].cash = 10_000;
+    for (const b of ownedBrands(game, 0)) b.marketing = 6;
+    computeShares(game);
+    const before = economyShare(game, 0);
+    invest(game, 0, key);
+    for (let i = 0; i < 60; i++) tick(game, 0.5, half);
+    const solo = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+    for (const b of ownedBrands(solo, 0)) b.marketing = 6;
+    computeShares(solo);
+    for (let i = 0; i < 60; i++) tick(solo, 0.5, half);
+    assert.ok(economyShare(game, 0) > economyShare(solo, 0),
+      `${key} should leave you more competitive, not just richer`);
+  }
+});
+
+test('dealmaking keeps the reach of what you buy', () => {
+  const game = openMarkets(createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) }));
+  const target = game.brands.find((b) => b.owner === null);
+  const equity = target.equity;
+  game.firms[0].cash = 10_000;
+  invest(game, 0, 'dealmaking');
+  acquire(game, 0, target.id);
+  assert.ok(target.equity > equity, 'a well-run handover does not lose customers');
+});
+
+test('brands climb tiers as their reach grows, and tiers pull customers', () => {
+  const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const brand = ownedBrands(game, 0)[0];
+
+  brand.equity = 5;
+  assert.equal(brandTier(brand).name, 'Local');
+  for (const tier of TIERS.slice(1)) {
+    brand.equity = tier.at;
+    assert.equal(brandTier(brand).name, tier.name);
+  }
+
+  // The rung itself is worth something: same price, same reach either side of
+  // a threshold, but the higher tier pulls harder.
+  const below = TIERS[1].at - 0.01;
+  brand.equity = below;
+  const quiet = attraction(game, brand);
+  brand.equity = TIERS[1].at;
+  assert.ok(attraction(game, brand) > quiet * 1.05, 'crossing a tier is a real step up');
+});
+
+test('a tier promotion is announced', () => {
+  const game = createGame({ players: 6, rng: seq([0.3, 0.8, 0.15, 0.6]) });
+  const brand = ownedBrands(game, 0)[0];
+  brand.equity = TIERS[1].at - 1;
+  brand.marketing = 30;
+  game.log.length = 0;
+  for (let i = 0; i < 40 && !game.log.some((e) => e.text.includes('regional')); i++) tick(game, 0.25, half);
+  assert.ok(game.log.some((e) => e.text.includes(brand.name) && e.text.includes('regional')),
+    'climbing a rung should be worth saying out loud');
 });
 
 test('a startup is sheltered from category-edge raids', () => {
@@ -862,7 +998,7 @@ test('a full game resolves without NaNs or negative cash', () => {
     }
   }
   assert.equal(game.over, true, 'the economy should consolidate within the tick budget');
-  assert.ok(['monopoly', 'last-standing', 'bought-out'].includes(game.outcome));
+  assert.ok(['monopoly', 'last-standing', 'bought-out', 'time'].includes(game.outcome));
   assert.ok(clamp(game.winner ?? 0, 0, 3) === (game.winner ?? 0));
 });
 

@@ -169,6 +169,63 @@ export const LAUNCH_COOLDOWN = 12;
 export const MAX_BRANDS_PER_MARKET = 6;
 
 /**
+ * Capabilities: permanent investments in the firm itself. They are the spine
+ * of a long game — income is not just a score, it is the thing you convert
+ * into a structural advantage — and they pull in different directions on
+ * purpose. Nobody can afford them all in a round, so which ladder you climb
+ * is the strategic decision the rest of the game hangs off.
+ */
+export const CAPABILITIES = {
+  distribution: {
+    label: 'Distribution',
+    blurb: 'Warehouses, trucks and shelf space. Your brands are in front of more customers, cost less to run, and are cheaper to start.',
+    detail: (level) => `+${Math.round(level * 5)}% reach, overhead −${Math.round(level * 25)}%, launches −${Math.round(level * 20)}%`,
+    max: 3,
+  },
+  research: {
+    label: 'Research',
+    blurb: 'Process and product work. A better product at a lower cost to make, across everything you own.',
+    detail: (level) => `+${Math.round(level * 5)}% appeal, unit costs −${Math.round(level * 8)}%`,
+    max: 3,
+  },
+  creative: {
+    label: 'Creative studio',
+    blurb: 'In-house advertising. Every dollar of marketing buys more reach.',
+    detail: (level) => `Marketing +${Math.round(level * 25)}% effective`,
+    max: 3,
+  },
+  dealmaking: {
+    label: 'Dealmaking',
+    blurb: 'Bankers on retainer. Takeovers cost less over fair value, and a brand you buy is yours to trade sooner.',
+    detail: (level) => `Premium −${Math.round(level * 15)} points, bought brands keep +${Math.round(level * 12)}% reach, integration −${level * 8}s`,
+    max: 3,
+  },
+};
+
+/** Reach an acquired brand keeps per level of dealmaking. */
+export const INTEGRATION_CARE = 0.12;
+
+/** How much each level of distribution and research pulls customers in. */
+export const AVAILABILITY_PULL = 0.05;
+export const QUALITY_PULL = 0.05;
+
+/** What the next level of any capability costs. */
+export const CAPABILITY_COSTS = [60, 150, 340];
+
+/**
+ * Brand tiers. A brand that holds its reach climbs a ladder, and each rung
+ * pulls a few more customers in on its own — a brand people have heard of
+ * sells itself. It is the other half of building: the first is your firm, the
+ * second is each business inside it.
+ */
+export const TIERS = [
+  { name: 'Local', at: 0, pull: 1 },
+  { name: 'Regional', at: 35, pull: 1.06 },
+  { name: 'National', at: 62, pull: 1.14 },
+  { name: 'Iconic', at: 86, pull: 1.24 },
+];
+
+/**
  * One-tap plays, for when there is no time to nurse a slider: an ad blitz
  * buys equity outright, a promotion discounts a brand for a while, and a
  * category push spikes a whole market's demand.
@@ -344,6 +401,49 @@ export function worldSize(firmCount) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** The level a firm has reached in one capability. */
+export function capabilityLevel(game, firmId, key) {
+  return game.firms[firmId]?.capabilities?.[key] ?? 0;
+}
+
+/** What the next level of `key` costs this firm, or null when maxed out. */
+export function capabilityCost(game, firmId, key) {
+  const spec = CAPABILITIES[key];
+  if (!spec) return null;
+  const level = capabilityLevel(game, firmId, key);
+  return level >= spec.max ? null : CAPABILITY_COSTS[level];
+}
+
+export function canInvest(game, firmId, key) {
+  const firm = game.firms[firmId];
+  const spec = CAPABILITIES[key];
+  if (!firm || !spec || firm.gone || game.over) return { ok: false, reason: 'unavailable' };
+  const cost = capabilityCost(game, firmId, key);
+  if (cost === null) return { ok: false, reason: 'fully built', cost: null };
+  if (buyingPower(game, firmId) < cost) return { ok: false, reason: 'not enough capital', cost };
+  return { ok: true, cost };
+}
+
+/** Buy the next level of a capability. Permanent, and never taken from you. */
+export function invest(game, firmId, key) {
+  const check = canInvest(game, firmId, key);
+  if (!check.ok) return check;
+  const firm = game.firms[firmId];
+  if (firm.cash < check.cost) borrow(game, firmId, check.cost - firm.cash);
+  firm.cash -= check.cost;
+  firm.capabilities = { ...(firm.capabilities ?? {}), [key]: capabilityLevel(game, firmId, key) + 1 };
+  computeShares(game);
+  logEvent(game, `${firm.name} invested in ${CAPABILITIES[key].label.toLowerCase()} (level ${firm.capabilities[key]}).`, firm.color);
+  return { ok: true, cost: check.cost, level: firm.capabilities[key] };
+}
+
+/** The tier a brand has reached, from its accumulated reach. */
+export function brandTier(brand) {
+  let tier = TIERS[0];
+  for (const candidate of TIERS) if (brand.equity >= candidate.at) tier = candidate;
+  return tier;
+}
+
 export function clamp(n, lo, hi) {
   return n < lo ? lo : n > hi ? hi : n;
 }
@@ -475,6 +575,7 @@ export function addFirm(game, { name, human = false, bot = false, rng = Math.ran
     joinedAt: game.time,
     cooldown: rng() * 6, // Stagger bot decisions from the first tick.
     actionReady: {},
+    capabilities: {},
   };
   game.firms.push(firm);
   if (seed) for (let i = 0; i < SEED_BRANDS; i++) seatFirm(game, firm, rng);
@@ -581,9 +682,22 @@ export function effectivePrice(game, brand) {
   return brand.price * (promo ? ACTIONS.promo.discount : 1);
 }
 
+/**
+ * How badly customers want a brand. Reach pulls, price pushes — and two of the
+ * firm's capabilities pull as well, because they are things customers can
+ * feel: distribution is whether the product is on the shelf in front of them,
+ * research is whether it is any good. Without this, those ladders would only
+ * ever improve margins, and rounds are won on share, not on margins — so
+ * building the firm would be a trap for anyone trying to win.
+ */
 export function attraction(game, brand) {
   const market = game.markets[brand.marketId];
-  return Math.max(1, brand.equity) * Math.pow(effectivePrice(game, brand), -market.elasticity);
+  const owner = brand.owner ?? -1;
+  const capability = 1
+    + AVAILABILITY_PULL * capabilityLevel(game, owner, 'distribution')
+    + QUALITY_PULL * capabilityLevel(game, owner, 'research');
+  return Math.max(1, brand.equity) * brandTier(brand).pull * capability
+    * Math.pow(effectivePrice(game, brand), -market.elasticity);
 }
 
 /** Total units a category absorbs per second, after buzz and price effects. */
@@ -607,12 +721,15 @@ export function computeShares(game) {
       brand.share = attrs[i] / total;
       brand.units = demand * brand.share;
       brand.revenue = brand.units * price;
-      const gross = brand.units * (price - market.unitCost);
+      const unitCost = market.unitCost
+        * (1 - 0.08 * capabilityLevel(game, brand.owner ?? -1, 'research'));
+      const gross = brand.units * (price - unitCost);
       const stable = brand.owner === null ? 1 : stableSize(game, brand.owner, market.id);
       const overhead = brand.owner === null ? 0
         : BRAND_OVERHEAD * costPressure(game) * scaleFactor(game, brand.owner)
           * (market.baseDemand / OVERHEAD_REFERENCE_DEMAND)
-          * Math.pow(stable, -CATEGORY_SYNERGY);
+          * Math.pow(stable, -CATEGORY_SYNERGY)
+          * (1 - 0.25 * capabilityLevel(game, brand.owner, 'distribution'));
       brand.profit = gross - brand.marketing - overhead;
     }
   }
@@ -677,8 +794,9 @@ export function buyingPower(game, firmId) {
 /** Price to take a brand, including the premium its owner will demand. */
 export function acquisitionPrice(game, buyerId, brandId) {
   const brand = game.brands[brandId];
-  const premium = brand.owner === null ? INDEPENDENT_PREMIUM : HOSTILE_PREMIUM;
-  return brandValue(game, brandId) * (1 + premium);
+  const base = brand.owner === null ? INDEPENDENT_PREMIUM : HOSTILE_PREMIUM;
+  const discount = 0.15 * capabilityLevel(game, buyerId, 'dealmaking');
+  return brandValue(game, brandId) * (1 + Math.max(0.05, base - discount));
 }
 
 /**
@@ -764,8 +882,16 @@ export function acquire(game, buyerId, brandId) {
     repay(game, seller.id, seller.cash); // Sellers pay down debt first.
   }
   if (seller) seller.raidRespite = game.time + RAID_RESPITE;
+  // A firm with bankers and an integration team keeps what it buys intact;
+  // everyone else loses momentum in the handover. This is what makes the
+  // dealmaking ladder worth climbing for a serial acquirer: not just a cheaper
+  // price, but a brand that is still worth something the day after.
+  brand.equity = clamp(
+    brand.equity * (1 + INTEGRATION_CARE * capabilityLevel(game, buyerId, 'dealmaking')),
+    1, MAX_EQUITY);
   brand.owner = buyerId;
-  brand.lockedUntil = game.time + INTEGRATION_LOCK;
+  brand.lockedUntil = game.time
+    + Math.max(6, INTEGRATION_LOCK - 8 * capabilityLevel(game, buyerId, 'dealmaking'));
   if (brand.marketing < 1) brand.marketing = 1;
 
   logEvent(game, seller
@@ -822,14 +948,16 @@ export function launchMomentum(game, brand) {
 }
 
 /** What it costs to put a new brand into a market. Bigger markets cost more. */
-export function launchCost(game, marketId) {
-  return LAUNCH_BASE_COST + game.markets[marketId].baseDemand * LAUNCH_COST_PER_DEMAND;
+export function launchCost(game, marketId, firmId = null) {
+  const base = LAUNCH_BASE_COST + game.markets[marketId].baseDemand * LAUNCH_COST_PER_DEMAND;
+  if (firmId === null) return base;
+  return base * (1 - 0.2 * capabilityLevel(game, firmId, 'distribution'));
 }
 
 export function canLaunch(game, firmId, marketId) {
   const firm = game.firms[firmId];
   const market = game.markets[marketId];
-  const cost = market ? launchCost(game, marketId) : 0;
+  const cost = market ? launchCost(game, marketId, firmId) : 0;
   if (!firm || !market || firm.boughtOut || game.over) return { ok: false, reason: 'unavailable' };
   if (market.brandIds.length >= MAX_BRANDS_PER_MARKET) {
     return { ok: false, reason: 'market is full', cost };
@@ -1088,9 +1216,17 @@ export function tick(game, dt, rng = Math.random) {
   for (const brand of game.brands) {
     const market = game.markets[brand.marketId];
     const trial = game.time < (brand.promoUntil ?? 0) ? PROMO_LOYALTY * brand.units : 0;
-    const gain = (EQUITY_GAIN * market.adPower * brand.marketing + trial)
+    const studio = 1 + 0.25 * capabilityLevel(game, brand.owner ?? -1, 'creative');
+    const gain = (EQUITY_GAIN * market.adPower * brand.marketing * studio + trial)
       * launchMomentum(game, brand) * (1 - brand.equity / MAX_EQUITY);
+    const wasTier = brandTier(brand).name;
     brand.equity = clamp(brand.equity + (gain - EQUITY_DECAY * brand.equity) * dt, 1, MAX_EQUITY);
+    const nowTier = brandTier(brand);
+    if (nowTier.name !== wasTier && brand.owner !== null
+        && TIERS.indexOf(nowTier) > TIERS.findIndex((t) => t.name === wasTier)) {
+      logEvent(game, `${brand.name} is now a ${nowTier.name.toLowerCase()} brand.`,
+        game.firms[brand.owner].color);
+    }
   }
 
   computeShares(game);
@@ -1255,6 +1391,19 @@ export function runAi(game, firm, dt, rng = Math.random) {
     runAction(game, firm.id, 'push', stronghold.id);
   }
 
+  // Build the firm itself when there is cash to spare. Which ladder depends
+  // on how this firm is actually playing: a sprawling portfolio wants cheaper
+  // overhead, a volume seller wants cheaper goods, an advertiser wants a
+  // studio, and a serial acquirer wants bankers.
+  if (firm.cash > 500) {
+    const revenue = mine.reduce((sum, b) => sum + b.revenue, 0);
+    const ads = mine.reduce((sum, b) => sum + b.marketing, 0);
+    const wants = mine.length >= 6 ? 'distribution'
+      : revenue > 30 ? 'research'
+        : ads > revenue * 0.25 ? 'creative' : 'dealmaking';
+    if (canInvest(game, firm.id, wants).ok) invest(game, firm.id, wants);
+  }
+
   firm.cooldown -= dt;
   if (firm.cooldown > 0) return;
 
@@ -1268,7 +1417,7 @@ export function runAi(game, firm, dt, rng = Math.random) {
     .map((m) => ({ market: m, grip: categoryGrip(game, firm.id, m.id) }))
     .filter(({ market, grip }) => grip < 0.62 && canLaunch(game, firm.id, market.id).ok)
     .sort((a, b) => b.grip - a.grip)[0];
-  if (room && firm.cash > launchCost(game, room.market.id) * 2.4 && rng() < 0.55) {
+  if (room && firm.cash > launchCost(game, room.market.id, firm.id) * 2.4 && rng() < 0.55) {
     launchBrand(game, firm.id, room.market.id);
     firm.cooldown = 8 + rng() * 8;
     return;
