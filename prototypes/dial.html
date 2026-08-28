@@ -132,6 +132,10 @@
 </div>
 
 <p class="note">
+  <b style="color:#e8eef5">Tap once to push into a market, again to hold it, again to stop.</b>
+  A dashed line shows money leaving your hub for a market, labelled with what it costs per second —
+  yours and everyone else's. Once you hold more than half of a market you set the price there and it
+  pays more than its size, so finishing a market competes with starting another.<br><br>
   Segments are markets, sized by how big they are. Colour fills outward from the hub as a firm takes
   share; a full spoke is a cornered market. You can only push into a segment touching one you hold.
   Brightness on a border is capital massing there — it shows a few seconds before share starts moving,
@@ -162,6 +166,18 @@ const RIVAL_COST = 3.4;    // taking held share costs this much more than open s
 const LOYALTY = 34;        // seconds for share to become fully entrenched
 const WIN = 0.5;
 
+/**
+ * Pricing power. Income from a market rises faster than your share of it once
+ * you pass half — a dominant position sets the price, a minority one takes it.
+ * This is what makes depth a real alternative to width: two markets at 40%
+ * earn less than one at 80%, so "finish what you started" competes with
+ * "take the next one".
+ */
+const PRICING_POWER = 0.8;
+
+/** Fortifying converts money into loyalty instead of share. */
+const FORTIFY_RATE = 0.32;
+
 const SECTORS = [
   'Coffee', 'Grocery', 'Convenience', 'Snacks', 'Beverages', 'Restaurants',
   'Apparel', 'Luxury', 'Sportswear', 'Fitness', 'Wellness', 'Pharma',
@@ -185,9 +201,11 @@ function makeWorld() {
   const firms = FIRMS.map((firm, i) => ({
     ...firm,
     id: i,
-    capital: 40,
+    capital: 14,
     commit: firm.you ? 0.6 : 0.55 + Math.random() * 0.2,
     target: null,
+    mode: 'push',
+    spending: 0,
     think: Math.random() * 2,
     banked: 0,
   }));
@@ -205,6 +223,15 @@ function makeWorld() {
 const total = () => world.segments.reduce((sum, s) => sum + s.weight, 0);
 const heldWeight = (id) => world.segments.reduce((sum, s) => sum + s.weight * s.shares[id], 0);
 const shareOf = (id) => heldWeight(id) / total();
+
+/** The multiplier dominance earns in one market: 1.0 at half, more above it. */
+const power = (share) => 1 + PRICING_POWER * Math.max(0, share - 0.5) * 2;
+
+/** What a segment pays a firm per second, dominance included. */
+const yieldOf = (segment, id) =>
+  segment.weight * segment.shares[id] * INCOME * power(segment.shares[id]);
+
+const incomeOf = (id) => world.segments.reduce((sum, s) => sum + yieldOf(s, id), 0);
 const open = (segment) => Math.max(0, 1 - segment.shares.reduce((a, b) => a + b, 0));
 
 /** A firm may push into a segment it holds, or one touching a segment it holds. */
@@ -233,7 +260,7 @@ function step(dt) {
   world.time += dt;
 
   for (const firm of world.firms) {
-    firm.capital += heldWeight(firm.id) * INCOME * dt;
+    firm.capital += incomeOf(firm.id) * dt;
     if (!firm.you) thinkFor(firm, dt);
 
     const reach = reachable(firm.id);
@@ -244,9 +271,20 @@ function step(dt) {
     if (firm.target !== null && firm.commit > 0) {
       const spend = Math.min(firm.capital, firm.capital * firm.commit * dt * 1.6);
       firm.capital -= spend;
-      world.segments[firm.target].pressure[firm.id] += spend;
+      firm.spending = spend / dt;
+      const segment = world.segments[firm.target];
+      if (firm.mode === 'fortify') {
+        // Money into loyalty rather than share: slower to matter, but it is
+        // what makes a position expensive to take off you.
+        segment.held[firm.id] = Math.min(LOYALTY * 1.6,
+          segment.held[firm.id] + spend * FORTIFY_RATE);
+        segment.shield = Math.min(1, (segment.shield ?? 0) + spend * 0.02);
+      } else {
+        segment.pressure[firm.id] += spend;
+      }
       firm.banked = Math.max(0, firm.banked - dt * 0.6);
     } else {
+      firm.spending = 0;
       firm.banked = Math.min(1, firm.banked + dt * 0.35);
     }
   }
@@ -270,7 +308,7 @@ function step(dt) {
           .filter((other) => other.id !== firm.id && segment.shares[other.id] > 0.001)
           .sort((a, b) => segment.shares[b.id] - segment.shares[a.id])[0];
         if (victim) {
-          const entrenched = 1 + 4 * Math.min(1, segment.held[victim.id] / LOYALTY);
+          const entrenched = 1 + 4 * Math.min(1.6, segment.held[victim.id] / LOYALTY);
           const taken = Math.min(segment.shares[victim.id], force / (RIVAL_COST * entrenched));
           segment.shares[victim.id] -= taken;
           segment.shares[firm.id] += taken;
@@ -286,10 +324,15 @@ function step(dt) {
     }
 
     for (const firm of world.firms) {
-      segment.held[firm.id] = segment.shares[firm.id] > 0.02
-        ? Math.min(LOYALTY, segment.held[firm.id] + dt) : 0;
+      if (segment.shares[firm.id] <= 0.02) { segment.held[firm.id] = 0; continue; }
+      // Time settles a position toward loyal; fortifying pushes it beyond,
+      // and time must never undo what was paid for.
+      segment.held[firm.id] = segment.held[firm.id] >= LOYALTY
+        ? segment.held[firm.id]
+        : Math.min(LOYALTY, segment.held[firm.id] + dt);
     }
     segment.flash = Math.max(0, segment.flash - dt * 1.4);
+    segment.shield = Math.max(0, (segment.shield ?? 0) - dt * 0.5);
   }
 
   for (const firm of world.firms) {
@@ -309,16 +352,35 @@ function thinkFor(firm, dt) {
     const segment = world.segments[id];
     const free = open(segment);
     const mine = segment.shares[firm.id];
-    // Open ground first, then a rival who is thin here, and a preference for
-    // finishing what it already holds.
     const rival = world.firms
       .filter((other) => other.id !== firm.id)
       .reduce((sum, other) => sum + segment.shares[other.id], 0);
-    const value = segment.weight * (free * 1.6 + rival * 0.55 + (mine > 0.05 && mine < 0.9 ? 0.5 : 0));
+
+    // Open ground is cheapest; finishing a market it half-holds is worth
+    // extra now that dominance pays; a rival who is thin here is a target.
+    const deepening = mine > 0.35 && mine < 0.97 ? 0.9 : 0;
+    const value = segment.weight * (free * 1.6 + rival * 0.5 + deepening);
     const score = value * (0.8 + Math.random() * 0.4);
-    if (!best || score > best.score) best = { id, score };
+    if (!best || score > best.score) best = { id, score, mine, pressure: segment.pressure };
   }
-  firm.target = best ? best.id : null;
+
+  // Under attack somewhere valuable? Spend on holding it instead.
+  const besieged = world.segments
+    .filter((segment) => segment.shares[firm.id] > 0.4)
+    .map((segment) => ({
+      segment,
+      threat: world.firms.reduce((sum, other) =>
+        sum + (other.id === firm.id ? 0 : segment.pressure[other.id]), 0),
+    }))
+    .sort((a, b) => b.threat - a.threat)[0];
+
+  if (besieged && besieged.threat > 14 && Math.random() < 0.7) {
+    firm.target = besieged.segment.id;
+    firm.mode = 'fortify';
+  } else {
+    firm.target = best ? best.id : null;
+    firm.mode = 'push';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -358,11 +420,16 @@ function band(cx, cy, from, to, a0, a1, fill, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
+/** Markets with a live money flow this frame; their names step aside. */
+const flowLabels = new Set();
+
 function draw() {
   const { size, cx, cy, r0, r1 } = layout();
   ctx.clearRect(0, 0, size, size);
   const you = world.firms[0];
   const reach = reachable(0);
+  const labelled = new Set(flowLabels);
+  flowLabels.clear();
 
   // Quarter rings, so how deep a colour reaches is readable at a glance.
   for (const fraction of [0.25, 0.5, 0.75]) {
@@ -390,6 +457,16 @@ function draw() {
       const next = radius + (r1 - r0) * share;
       band(cx, cy, radius, next, from, to, firm.color, firm.you ? 0.95 : 0.82);
       radius = next;
+    }
+
+    // A market you dominate earns more than its size suggests: mark it.
+    for (const firm of world.firms) {
+      if (segment.shares[firm.id] <= 0.5) continue;
+      ctx.save();
+      ctx.shadowColor = firm.color;
+      ctx.shadowBlur = 10;
+      band(cx, cy, r1 - 3, r1 - 1, from, to, firm.color, 0.9);
+      ctx.restore();
     }
 
     if (segment.shares[0] > 0.02) {
@@ -422,6 +499,15 @@ function draw() {
       ctx.restore();
     }
 
+    // Money being spent on holding it, rather than taking something.
+    if ((segment.shield ?? 0) > 0.05) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r0 - 2, from, to);
+      ctx.strokeStyle = `rgba(232,238,245,${0.15 + 0.5 * segment.shield})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
     // A capture flashes, so something happening catches the eye.
     if (segment.flash > 0.01) {
       band(cx, cy, r0, r1, from, to, '#ffffff', segment.flash * 0.28);
@@ -429,9 +515,9 @@ function draw() {
 
     // Labels stay outside the ring, upright, and only where there is room.
     const mid = (a0 + a1) / 2;
-    if (a1 - a0 > 0.16) {
-      const lx = cx + Math.cos(mid) * (r1 + 20);
-      const ly = cy + Math.sin(mid) * (r1 + 20);
+    if (a1 - a0 > 0.16 && !labelled.has(segment.id)) {
+      const lx = cx + Math.cos(mid) * (r1 + 22);
+      const ly = cy + Math.sin(mid) * (r1 + 22);
       ctx.fillStyle = segment.shares[0] > 0.02 ? 'rgba(232,238,245,0.85)' : 'rgba(147,166,184,0.45)';
       ctx.font = `${Math.max(9, size * 0.0175)}px Archivo, system-ui, sans-serif`;
       const rightSide = Math.cos(mid) > 0;
@@ -443,6 +529,45 @@ function draw() {
         : Math.max(lx + 6, 4 + width);
       ctx.fillText(segment.name, x, ly);
     }
+  }
+
+  // Every live commitment, drawn as money leaving a hub for a market. This is
+  // the thing that was impossible to read: a push is now a labelled flow, not
+  // a colour that quietly changes.
+  ctx.font = `600 ${Math.max(9.5, size * 0.019)}px "IBM Plex Mono", monospace`;
+  ctx.textBaseline = 'middle';
+  for (const firm of world.firms) {
+    if (firm.target === null || firm.spending < 0.05) continue;
+    const [a0, a1] = angles(firm.target);
+    const mid = (a0 + a1) / 2;
+    const fortifying = firm.mode === 'fortify';
+
+    // A dashed line from the hub to the market, marching outward.
+    ctx.save();
+    ctx.setLineDash([5, 9]);
+    ctx.lineDashOffset = -(world.time * (fortifying ? 12 : 34)) % 14;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(mid) * (r0 - 12), cy + Math.sin(mid) * (r0 - 12));
+    ctx.lineTo(cx + Math.cos(mid) * (r1 - 4), cy + Math.sin(mid) * (r1 - 4));
+    ctx.strokeStyle = firm.color;
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // What it costs, per second, in the firm's own colour.
+    const label = `${fortifying ? '⛨' : '▸'} $${firm.spending.toFixed(1)}/s`;
+    const lx = cx + Math.cos(mid) * (r1 + 15);
+    const ly = cy + Math.sin(mid) * (r1 + 15);
+    flowLabels.add(firm.target);
+    const width = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(5,8,13,0.82)';
+    ctx.beginPath();
+    ctx.roundRect(lx - width / 2 - 6, ly - 10, width + 12, 20, 6);
+    ctx.fill();
+    ctx.fillStyle = firm.color;
+    ctx.textAlign = 'center';
+    ctx.fillText(label, lx, ly);
   }
 
   // The hub: each firm's banked capital, so a burst being loaded is visible.
@@ -496,7 +621,20 @@ canvas.addEventListener('click', (event) => {
     flashTarget(`${world.segments[id].name} is out of reach — push from a market you hold.`);
     return;
   }
-  world.firms[0].target = world.firms[0].target === id ? null : id;
+  const you = world.firms[0];
+  const segment = world.segments[id];
+  const canFortify = segment.shares[0] > 0.15;
+
+  // One verb, three uses: tap to push, tap again to hold, tap again to stop.
+  if (you.target !== id) {
+    you.target = id;
+    you.mode = 'push';
+  } else if (you.mode === 'push' && canFortify) {
+    you.mode = 'fortify';
+  } else {
+    you.target = null;
+    you.mode = 'push';
+  }
 });
 
 let targetMessage = '';
@@ -519,7 +657,10 @@ el('watch').addEventListener('click', () => {
 function paintPanel() {
   const you = world.firms[0];
   el('shareOut').textContent = `${(shareOf(0) * 100).toFixed(1)}%`;
-  el('capitalOut').textContent = `$${you.capital.toFixed(0)} · +$${(heldWeight(0) * INCOME).toFixed(1)}/s`;
+  const income = incomeOf(0);
+  const flat = heldWeight(0) * INCOME;
+  el('capitalOut').innerHTML = `$${you.capital.toFixed(0)} banked · +$${income.toFixed(1)}/s`
+    + (income > flat * 1.02 ? `<br><span style="color:#e0b357">dominance +$${(income - flat).toFixed(1)}/s</span>` : '');
 
   const elapsed = (performance.now() - started) / 1000;
   el('clock').textContent = `${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, '0')}`;
@@ -537,9 +678,25 @@ function paintPanel() {
   } else {
     const segment = world.segments[you.target];
     const rivals = world.firms.filter((f) => !f.you && segment.shares[f.id] > 0.02);
-    el('targetOut').innerHTML = `Pushing into <b>${segment.name}</b>`
-      + `<span class="hint">${(segment.shares[0] * 100).toFixed(0)}% yours`
-      + `${rivals.length ? ` · ${rivals.map((r) => r.name).join(', ')} here` : ' · open ground'}</span>`;
+    const mine = segment.shares[0];
+    const incoming = world.firms.reduce((sum, firm) =>
+      sum + (firm.you ? 0 : segment.pressure[firm.id]), 0);
+
+    if (you.mode === 'fortify') {
+      const settled = segment.held[0] / LOYALTY;
+      el('targetOut').innerHTML = `Holding <b>${segment.name}</b> — $${you.spending.toFixed(1)}/s into loyalty`
+        + `<span class="hint">${settled >= 1
+          ? `fortified ×${(1 + 4 * Math.min(1.6, settled)).toFixed(1)} to take`
+          : `${(settled * 100).toFixed(0)}% settled`}`
+        + `${incoming > 4 ? ' · under attack' : ''}</span>`;
+    } else {
+      // What this push is actually buying, in the units you spend.
+      const bonus = power(mine);
+      el('targetOut').innerHTML = `Pushing <b>${segment.name}</b> — $${you.spending.toFixed(1)}/s`
+        + `<span class="hint">${(mine * 100).toFixed(0)}% yours`
+        + `${mine > 0.5 ? ` · earning ×${bonus.toFixed(2)}` : ''}`
+        + `${rivals.length ? ` · vs ${rivals.map((r) => r.name).join(', ')}` : ' · open ground'}</span>`;
+    }
   }
 
   el('legend').innerHTML = world.firms.map((firm) => `
