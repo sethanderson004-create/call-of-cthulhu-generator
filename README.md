@@ -67,6 +67,16 @@ a stacked share bar coloured by owner, and every brand's price, equity and
 share underneath it.
 
 Open `monopolis.html` (engine: `src/monopolis.js`, tests: `test/monopolis.test.mjs`).
+It loads its engine as an ES module, so serve the folder rather than opening the
+file directly:
+
+```sh
+python3 -m http.server 8000   # then visit localhost:8000/monopolis.html
+```
+
+For a single self-contained file you can open straight from disk, run
+`node tools/build-standalone.mjs` — it inlines the engine into
+`dist/monopolis.html`.
 
 ## What it generates
 

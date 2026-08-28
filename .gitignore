@@ -2,3 +2,6 @@ node_modules/
 *.log
 .DS_Store
 .cache/
+
+# Standalone build output (regenerate with tools/build-standalone.mjs)
+dist/

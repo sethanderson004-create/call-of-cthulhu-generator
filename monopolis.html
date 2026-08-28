@@ -6,6 +6,9 @@
 <title>Monopolis — Corner the Market</title>
 <meta name="description" content="A real-time strategy game about building a business empire: set prices, fund marketing, and buy out rival brands until you own half the economy." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d1218'/%3E%3Crect x='3' y='9' width='2.6' height='4' fill='%234aa3d9'/%3E%3Crect x='6.7' y='5.5' width='2.6' height='7.5' fill='%237fd6a1'/%3E%3Crect x='10.4' y='3' width='2.6' height='10' fill='%23d9a441'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
 <style>
   :root {
     --page: #070a0e;
@@ -21,8 +24,11 @@
     --mint: #7fd6a1;
     --sky: #4aa3d9;
     --rose: #c2607f;
-    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    /* A financial-press pairing: broadsheet serif for names, a plain
+       grotesque for interface text, and one mono for every figure. */
+    --display: "Bodoni Moda", "Times New Roman", Georgia, serif;
+    --sans: Archivo, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
@@ -32,9 +38,18 @@
     font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
   }
-  h1 { margin: 0; font-size: 22px; letter-spacing: 0.01em; }
+  h1 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 25px;
+    letter-spacing: -0.01em;
+  }
   h1 span { color: var(--gold); }
   .mono { font-family: var(--mono); }
+  .metric b, .row b, td, .brand .right, .brand .meta, .card .sub {
+    font-variant-numeric: tabular-nums;
+  }
 
   /* ---- top bar ------------------------------------------------------ */
   #hud {
@@ -104,7 +119,16 @@
     border-radius: 12px;
     padding: 12px 13px 10px;
   }
-  .card h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .card h3 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -0.005em;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
   .card .sub { color: var(--ink-faint); font-size: 11.5px; margin: 2px 0 9px; font-family: var(--mono); }
   .tag {
     font-size: 10px;
@@ -194,7 +218,15 @@
   }
   #overlay.show { display: grid; }
   #overlay .box { max-width: 460px; text-align: center; }
-  #overlay h2 { margin: 0 0 8px; font-size: 30px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+  #overlay h2 {
+    margin: 0 0 8px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 40px;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--ink);
+  }
   #overlay p { color: var(--ink-dim); line-height: 1.6; }
   footer { padding: 0 20px 30px; color: var(--ink-faint); font-size: 12px; }
 </style>
